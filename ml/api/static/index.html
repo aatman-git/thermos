@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THERMOS XGBoost Classifier</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+        }
+        header p {
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group label {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #34495e;
+            font-size: 0.9rem;
+        }
+        .form-group input, .form-group select {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        .form-group small {
+            color: #95a5a6;
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            width: 100%;
+            max-width: 300px;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .result-class {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .result-confidence {
+            background: #27ae60;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .probabilities {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .prob-bar {
+            background: #ecf0f1;
+            border-radius: 8px;
+            height: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        .prob-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 8px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .prob-label {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #7f8c8d;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+        .prob-value {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+        .error {
+            background: #fadbd8;
+            color: #c0392b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .example-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .example-btn {
+            background: #ecf0f1;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+        .example-btn:hover {
+            background: #bdc3c7;
+        }
+        @media (max-width: 600px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>THERMOS Classifier</h1>
+            <p>XGBoost Model for Thermal Anomaly Classification</p>
+        </header>
+
+        <div class="card">
+            <h2>Input Features</h2>
+            
+            <div class="example-buttons">
+                <button class="example-btn" onclick="loadExample('industrial_fire')">Industrial Fire</button>
+                <button class="example-btn" onclick="loadExample('gas_flare')">Gas Flare</button>
+                <button class="example-btn" onclick="loadExample('wildfire')">Wildfire</button>
+                <button class="example-btn" onclick="loadExample('agricultural')">Agricultural Burning</button>
+                <button class="example-btn" onclick="loadExample('mining')">Mining Activity</button>
+                <button class="example-btn" onclick="loadExample('thermal')">Industrial Thermal Source</button>
+            </div>
+
+            <form id="predictionForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="brightness_k">Brightness Temperature (K)</label>
+                        <input type="number" id="brightness_k" name="brightness_k" step="0.01" required min="200" max="500" value="367.0">
+                        <small>Range: 200 - 500 K</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="frp_mw">FRP (MW)</label>
+                        <input type="number" id="frp_mw" name="frp_mw" step="0.01" required min="0" max="5000" value="50.0">
+                        <small>Range: 0 - 5000 MW</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="firms_confidence_pct">FIRMS Confidence (%)</label>
+                        <input type="number" id="firms_confidence_pct" name="firms_confidence_pct" required min="0" max="100" value="90">
+                        <small>Range: 0 - 100%</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="daynight">Day/Night</label>
+                        <select id="daynight" name="daynight" required>
+                            <option value="D">Day</option>
+                            <option value="N">Night</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="observation_count_7d">Observation Count (7d)</label>
+                        <input type="number" id="observation_count_7d" name="observation_count_7d" required min="0" max="100" value="7">
+                        <small>Range: 0 - 100</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="persistence_hours_7d">Persistence Hours (7d)</label>
+                        <input type="number" id="persistence_hours_7d" name="persistence_hours_7d" step="0.01" required min="0" max="168" value="50.0">
+                        <small>Range: 0 - 168 hours</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="frp_trend_pct">FRP Trend (%)</label>
+                        <input type="number" id="frp_trend_pct" name="frp_trend_pct" step="0.01" required min="-100" max="500" value="10.0">
+                        <small>Range: -100% - 500%</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="industrial_proximity_km">Industrial Proximity (km)</label>
+                        <input type="number" id="industrial_proximity_km" name="industrial_proximity_km" step="0.01" required min="0" value="2.0">
+                        <small>Distance to industrial area</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="refinery_proximity_km">Refinery Proximity (km)</label>
+                        <input type="number" id="refinery_proximity_km" name="refinery_proximity_km" step="0.01" required min="0" value="5.0">
+                        <small>Distance to refinery</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="mine_proximity_km">Mine Proximity (km)</label>
+                        <input type="number" id="mine_proximity_km" name="mine_proximity_km" step="0.01" required min="0" value="10.0">
+                        <small>Distance to mine</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="forest_proximity_km">Forest Proximity (km)</label>
+                        <input type="number" id="forest_proximity_km" name="forest_proximity_km" step="0.01" required min="0" value="20.0">
+                        <small>Distance to forest</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="cropland_proximity_km">Cropland Proximity (km)</label>
+                        <input type="number" id="cropland_proximity_km" name="cropland_proximity_km" step="0.01" required min="0" value="30.0">
+                        <small>Distance to cropland</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="population_5km">Population (5km)</label>
+                        <input type="number" id="population_5km" name="population_5km" required min="0" value="1000">
+                        <small>Population within 5km radius</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="land_cover">Land Cover</label>
+                        <select id="land_cover" name="land_cover" required>
+                        </select>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn" id="predictBtn">Get Prediction</button>
+                    <button type="button" class="btn" style="background: #95a5a6;" onclick="clearForm()">Clear</button>
+                </div>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Predicting...</p>
+            </div>
+
+            <div id="errorContainer"></div>
+        </div>
+
+        <div class="card" id="resultCard" style="display: none;">
+            <h2>Prediction Result</h2>
+            <div class="result-card">
+                <div class="result-header">
+                    <span class="result-class" id="predictedClass">-</span>
+                    <span class="result-confidence" id="confidence">-</span>
+                </div>
+                <div class="probabilities" id="probabilities"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let landCoverTypes = [];
+
+        async function fetchFeatureInfo() {
+            try {
+                const response = await fetch('/api/feature_info');
+                const data = await response.json();
+                landCoverTypes = data.categorical_features.land_cover;
+                populateLandCoverSelect();
+            } catch (error) {
+                console.error('Failed to fetch feature info:', error);
+            }
+        }
+
+        function populateLandCoverSelect() {
+            const select = document.getElementById('land_cover');
+            select.innerHTML = '';
+            landCoverTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                select.appendChild(option);
+            });
+        }
+
+        const examples = {
+            industrial_fire: {
+                brightness_k: 367.0, frp_mw: 88.94, firms_confidence_pct: 80, daynight: "D",
+                observation_count_7d: 9, persistence_hours_7d: 87.42, frp_trend_pct: 16.98,
+                industrial_proximity_km: 1.16, refinery_proximity_km: 3.05, mine_proximity_km: 23.3,
+                forest_proximity_km: 74.1, cropland_proximity_km: 49.36, population_5km: 1821,
+                land_cover: "Industrial"
+            },
+            gas_flare: {
+                brightness_k: 367.0, frp_mw: 42.68, firms_confidence_pct: 96, daynight: "D",
+                observation_count_7d: 11, persistence_hours_7d: 70.34, frp_trend_pct: 0.73,
+                industrial_proximity_km: 1.24, refinery_proximity_km: 6.6, mine_proximity_km: 32.45,
+                forest_proximity_km: 33.75, cropland_proximity_km: 44.62, population_5km: 2910,
+                land_cover: "Built-up"
+            },
+            wildfire: {
+                brightness_k: 324.21, frp_mw: 37.6, firms_confidence_pct: 93, daynight: "D",
+                observation_count_7d: 9, persistence_hours_7d: 83.12, frp_trend_pct: 2.2,
+                industrial_proximity_km: 1.45, refinery_proximity_km: 5.08, mine_proximity_km: 13.13,
+                forest_proximity_km: 44.95, cropland_proximity_km: 32.22, population_5km: 3690,
+                land_cover: "Bare Land"
+            },
+            agricultural: {
+                brightness_k: 317.59, frp_mw: 17.62, firms_confidence_pct: 97, daynight: "D",
+                observation_count_7d: 5, persistence_hours_7d: 75.71, frp_trend_pct: 37.16,
+                industrial_proximity_km: 0.75, refinery_proximity_km: 1.87, mine_proximity_km: 25.47,
+                forest_proximity_km: 77.48, cropland_proximity_km: 12.54, population_5km: 16907,
+                land_cover: "Bare Land"
+            },
+            mining: {
+                brightness_k: 367.0, frp_mw: 71.51, firms_confidence_pct: 80, daynight: "D",
+                observation_count_7d: 5, persistence_hours_7d: 12.59, frp_trend_pct: 49.2,
+                industrial_proximity_km: 0.95, refinery_proximity_km: 7.88, mine_proximity_km: 5.88,
+                forest_proximity_km: 64.0, cropland_proximity_km: 34.34, population_5km: 12472,
+                land_cover: "Bare Land"
+            },
+            thermal: {
+                brightness_k: 350.65, frp_mw: 15.38, firms_confidence_pct: 91, daynight: "D",
+                observation_count_7d: 8, persistence_hours_7d: 66.17, frp_trend_pct: 21.82,
+                industrial_proximity_km: 1.07, refinery_proximity_km: 5.88, mine_proximity_km: 34.73,
+                forest_proximity_km: 70.01, cropland_proximity_km: 41.88, population_5km: 3262,
+                land_cover: "Built-up"
+            }
+        };
+
+        function loadExample(name) {
+            const ex = examples[name];
+            if (!ex) return;
+            Object.keys(ex).forEach(key => {
+                const el = document.getElementById(key);
+                if (el) el.value = ex[key];
+            });
+        }
+
+        function clearForm() {
+            document.getElementById('predictionForm').reset();
+            document.getElementById('resultCard').style.display = 'none';
+            document.getElementById('errorContainer').innerHTML = '';
+        }
+
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        async function predict(data) {
+            const response = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Prediction failed');
+            }
+            return response.json();
+        }
+
+        function displayResult(result) {
+            document.getElementById('predictedClass').textContent = result.predicted_class;
+            document.getElementById('confidence').textContent = (result.confidence * 100).toFixed(1) + '%';
+            
+            const probContainer = document.getElementById('probabilities');
+            probContainer.innerHTML = '';
+            
+            const sortedProbs = Object.entries(result.all_probabilities)
+                .sort((a, b) => b[1] - a[1]);
+            
+            sortedProbs.forEach(([className, prob]) => {
+                const div = document.createElement('div');
+                div.className = 'prob-bar';
+                div.innerHTML = `
+                    <div class="prob-fill" style="width: ${prob * 100}%"></div>
+                    <span class="prob-label">${className}</span>
+                    <span class="prob-value">${(prob * 100).toFixed(1)}%</span>
+                `;
+                probContainer.appendChild(div);
+            });
+            
+            document.getElementById('resultCard').style.display = 'block';
+            document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('predictBtn');
+            const loading = document.getElementById('loading');
+            btn.disabled = true;
+            loading.style.display = 'block';
+            document.getElementById('errorContainer').innerHTML = '';
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            data.firms_confidence_pct = parseInt(data.firms_confidence_pct);
+            data.observation_count_7d = parseInt(data.observation_count_7d);
+            data.population_5km = parseInt(data.population_5km);
+            data.brightness_k = parseFloat(data.brightness_k);
+            data.frp_mw = parseFloat(data.frp_mw);
+            data.persistence_hours_7d = parseFloat(data.persistence_hours_7d);
+            data.frp_trend_pct = parseFloat(data.frp_trend_pct);
+            data.industrial_proximity_km = parseFloat(data.industrial_proximity_km);
+            data.refinery_proximity_km = parseFloat(data.refinery_proximity_km);
+            data.mine_proximity_km = parseFloat(data.mine_proximity_km);
+            data.forest_proximity_km = parseFloat(data.forest_proximity_km);
+            data.cropland_proximity_km = parseFloat(data.cropland_proximity_km);
+            
+            try {
+                const result = await predict(data);
+                displayResult(result);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        fetchFeatureInfo();
+    </script>
+</body>
+</html>

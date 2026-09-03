@@ -1,0 +1,24 @@
+{
+  "perfect_separation": {
+    "mine_proximity_km": "Mining Activity",
+    "forest_proximity_km": "Wildfire",
+    "cropland_proximity_km": "Agricultural Burning"
+  },
+  "high_mi_features": [
+    "industrial_proximity_km",
+    "refinery_proximity_km",
+    "mine_proximity_km",
+    "land_cover",
+    "cropland_proximity_km",
+    "forest_proximity_km",
+    "observation_count_7d",
+    "population_5km",
+    "persistence_hours_7d",
+    "frp_trend_pct"
+  ],
+  "synthetic_indicators": {
+    "perfectly_balanced_classes": true,
+    "exact_brightness_cap_367_pct": 11.22
+  },
+  "recommendation": "Use ablation study comparing thermal-only vs thermal+temporal vs thermal+temporal+geospatial"
+}
