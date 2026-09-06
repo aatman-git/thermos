@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all ml modules (api, core, models, services, data)
 COPY ml /app/ml
 
+# Do not run the API as root inside the container.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 WORKDIR /app/ml
 
 EXPOSE 8000

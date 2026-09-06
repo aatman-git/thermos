@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "THERMOS — Industrial Thermal Intelligence API"
     VERSION: str = "2.0.0"
     API_V1_STR: str = "/api"
+    ENVIRONMENT: str = "development"
+    THERMOS_API_KEY: Optional[str] = None
+    TRUSTED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
 
     # MongoDB Configuration
     MONGODB_URL: str = "mongodb://localhost:27017"
@@ -19,10 +22,8 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: List[str] = [
-        "*",
         "http://localhost:3000",
-        "http://localhost:5173",
-        "https://sih-2026-nu-ten.vercel.app"
+        "http://localhost:5173"
     ]
 
     # Paths
