@@ -37,6 +37,13 @@ python seed.py
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+For production, set `ENVIRONMENT=production`, a long random `THERMOS_API_KEY`,
+the deployed API hostname in `TRUSTED_HOSTS`, and only the real frontend URL in
+`CORS_ORIGINS`. Protected API requests must send `X-API-Key`. Do not put this
+key in a browser frontend or a `VITE_` variable; browser code cannot keep a
+shared API secret private. Use a server-side proxy or user authentication for
+browser access.
+
 ---
 
 ## 🌐 Cloud Deployment Guide

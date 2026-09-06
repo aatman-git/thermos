@@ -1,7 +1,10 @@
 import logging
+import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 
 from core.config import settings
 from core.database import db_manager, fallback_store
@@ -149,6 +152,25 @@ app = FastAPI(
     """,
     lifespan=lifespan
 )
+
+if settings.ENVIRONMENT.lower() == "production" and not settings.THERMOS_API_KEY:
+    raise RuntimeError("THERMOS_API_KEY must be configured in production.")
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    protected_path = request.url.path.startswith(settings.API_V1_STR + "/")
+    public_path = request.url.path in {"/api/health"}
+
+    if settings.ENVIRONMENT.lower() == "production" and protected_path and not public_path:
+        supplied_key = request.headers.get("X-API-Key", "")
+        configured_key = settings.THERMOS_API_KEY or ""
+        if not secrets.compare_digest(supplied_key, configured_key):
+            return JSONResponse(status_code=401, content={"detail": "Valid X-API-Key header required."})
+
+    return await call_next(request)
 
 # CORS Configuration for Vercel and Local Frontend
 app.add_middleware(
