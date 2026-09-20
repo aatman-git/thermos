@@ -36,9 +36,9 @@ export default function AskThermos({ eventId }) {
     <div className="border-t border-[var(--color-border)] shrink-0">
       {/* Messages */}
       {messages.length > 0 && (
-        <div className="max-h-[180px] overflow-y-auto px-5 py-3 space-y-2">
+        <div className="max-h-[180px] overflow-y-auto px-4 py-3 space-y-2">
           {messages.map((msg, i) => (
-            <div key={i} className={`text-sm leading-relaxed ${msg.role === 'user' ? 'text-[var(--color-text-secondary)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
+            <div key={i} className={`text-scale-sm leading-relaxed ${msg.role === 'user' ? 'text-[var(--color-text-secondary)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
               {msg.role === 'user' ? (
                 <span className="text-[var(--color-text-tertiary)]">You: </span>
               ) : (
@@ -52,12 +52,12 @@ export default function AskThermos({ eventId }) {
 
       {/* Suggested chips */}
       {messages.length > 0 && (
-        <div className="px-5 pt-3 flex flex-wrap gap-1.5">
+        <div className="px-4 pt-2 flex flex-wrap gap-1.5">
           {SUGGESTED_QUESTIONS.map((q) => (
             <button
               key={q}
               onClick={() => handleSubmit(q)}
-              className="px-2.5 py-1 text-[12px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)] transition-colors"
+              className="px-2.5 py-1 text-scale-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)] transition-colors"
             >
               {q}
             </button>
@@ -66,18 +66,18 @@ export default function AskThermos({ eventId }) {
       )}
 
       {/* Input */}
-      <div className="px-5 py-3 flex gap-2">
+      <div className="px-4 py-3 flex gap-2">
         <input
           type="text"
           placeholder="Ask THERMOS…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-          className="flex-1 h-8 px-3 text-[15px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+          className="flex-1 h-8 px-3 text-scale-sm bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
         />
         <button
           onClick={() => handleSubmit()}
-          className="h-8 px-3 bg-[var(--color-accent)] text-[var(--color-text-primary)] text-[15px] font-medium rounded-[var(--radius-md)] hover:bg-[var(--color-accent-hover)] transition-colors"
+          className="h-8 px-3 bg-[var(--color-accent)] text-[var(--color-text-primary)] text-scale-sm font-medium rounded-[var(--radius-md)] hover:bg-[var(--color-accent-hover)] transition-colors"
         >
           Ask
         </button>

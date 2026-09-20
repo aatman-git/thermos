@@ -141,12 +141,12 @@ export default function TimeSlider() {
 
         <button
           onClick={() => setSpeed((s) => (s === 1 ? 2 : 1))}
-          className="font-data text-[12px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors shrink-0 w-6"
+          className="font-data text-scale-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors shrink-0 w-6"
         >
           {speed}x
         </button>
 
-        <span className="font-data text-[12px] text-[var(--color-text-tertiary)] shrink-0 w-14 text-right">
+        <span className="font-data text-scale-xs text-[var(--color-text-tertiary)] shrink-0 w-14 text-right">
           {formatLabel(range[0])}
         </span>
 
@@ -176,7 +176,7 @@ export default function TimeSlider() {
           />
         </div>
 
-        <span className="font-data text-[12px] text-[var(--color-text-tertiary)] shrink-0 w-8">
+        <span className="font-data text-scale-xs text-[var(--color-text-tertiary)] shrink-0 w-8">
           {formatLabel(range[1])}
         </span>
 
@@ -185,7 +185,7 @@ export default function TimeSlider() {
             <button
               key={preset.label}
               onClick={() => handlePreset(preset)}
-              className={`px-2 py-0.5 text-[12px] font-medium rounded-[var(--radius-sm)] transition-colors ${
+              className={`px-2 py-0.5 text-scale-xs font-medium rounded-[var(--radius-sm)] transition-colors ${
                 timeRange === preset.label
                   ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)]'
                   : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-white'

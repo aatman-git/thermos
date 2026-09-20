@@ -106,14 +106,14 @@ export default function MapControls() {
       <div className="flex flex-wrap gap-1.5">
         <button
           onClick={toggleBasemap}
-          className="h-8 px-2.5 text-sm font-medium bg-white/95 backdrop-blur border border-[var(--color-border)] rounded-[var(--radius-md)] hover:bg-[var(--color-accent-subtle)] shadow-sm transition-colors self-start"
+          className="h-8 px-2.5 text-scale-sm font-medium bg-white/95 backdrop-blur border border-[var(--color-border)] rounded-[var(--radius-md)] hover:bg-[var(--color-accent-subtle)] shadow-sm transition-colors self-start"
         >
           {basemap === 'light' ? 'Satellite' : 'Light'}
         </button>
 
         <button
           onClick={() => setDrawing((prev) => !prev)}
-          className={`h-8 px-2.5 text-sm font-medium border rounded-[var(--radius-md)] shadow-sm transition-colors self-start ${
+          className={`h-8 px-2.5 text-scale-sm font-medium border rounded-[var(--radius-md)] shadow-sm transition-colors self-start ${
             drawing ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-[var(--color-text-primary)]' : 'bg-white/95 border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-accent-subtle)]'
           }`}
         >
@@ -122,7 +122,7 @@ export default function MapControls() {
 
         <button
           onClick={toggleIndustrialOverlay}
-          className={`h-8 px-2.5 text-sm font-medium border rounded-[var(--radius-md)] shadow-sm transition-colors self-start ${
+          className={`h-8 px-2.5 text-scale-sm font-medium border rounded-[var(--radius-md)] shadow-sm transition-colors self-start ${
             showIndustrialOverlay ? 'bg-[var(--color-accent-subtle)] border-[var(--color-accent)] text-[var(--color-text-primary)]' : 'bg-white/95 border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-accent-subtle)]'
           }`}
         >
@@ -135,7 +135,7 @@ export default function MapControls() {
           <button
             key={mode.value}
             onClick={() => setMapMode(mode.value)}
-            className={`px-2.5 h-7 text-[12px] font-medium transition-colors ${
+            className={`px-2.5 h-7 text-scale-xs font-medium transition-colors ${
               mapMode === mode.value
                 ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'

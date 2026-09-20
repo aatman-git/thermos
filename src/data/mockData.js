@@ -167,6 +167,7 @@ export const RISK_COLORS = {
   'Critical': '#DC2626',
   'High': '#EA580C',
   'Moderate': '#D97706',
+  'Medium': '#D97706',
   'Low': '#16A34A',
 };
 

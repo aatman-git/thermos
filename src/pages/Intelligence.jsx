@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useStore } from '../store/useStore';
-import { CATEGORY_COLORS, RISK_COLORS, mockGeoJSON } from '../data/mockData';
-import { getCategoryColor, getRiskColor, getCategoryShort, formatDuration, formatCoords } from '../utils/formatters';
+import { RISK_COLORS, mockGeoJSON } from '../data/mockData';
+import { getCategoryColor, getCategoryShort, formatDuration } from '../utils/formatters';
 
 const SATELLITE_PASSES = [
   { sat: 'SNPP VIIRS', time: '10 mins ago', status: 'Ingested', anomalies: 14, resolution: '375m' },
@@ -39,52 +39,52 @@ export default function Intelligence() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-5 md:p-6">
+    <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="space-y-6 max-w-[1600px]">
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-[clamp(1.5rem,2vw,2rem)] font-semibold text-[var(--color-text-primary)] tracking-[-0.03em]">
+            <h1 className="text-scale-2xl font-bold text-[var(--color-text-primary)] tracking-tight">
               Intelligence & Threat Correlation
             </h1>
-            <p className="mt-1 text-[15px] leading-[1.6] text-[var(--color-text-secondary)]">
+            <p className="mt-1 text-scale-base text-[var(--color-text-secondary)]">
               Multi-source satellite ingestion, OSM industrial asset correlation & population buffer analytics
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 self-start rounded-[var(--radius-lg)] border border-[var(--color-accent)] bg-[var(--color-accent-subtle)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-text-primary)] shadow-[0_1px_0_rgba(17,24,39,0.04)]">
+          <div className="inline-flex items-center gap-2 self-start rounded-[var(--radius-lg)] border border-[var(--color-accent)] bg-[var(--color-accent-subtle)] px-3 py-1.5 text-scale-sm font-semibold text-[var(--color-text-primary)] shadow-xs">
             <span className="h-2 w-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
-            <span className="font-data">5 Sensors Active</span>
+            <span className="font-data tabular-nums">5 Sensors Active</span>
           </div>
         </header>
 
         <motion.section {...reveal} className="grid gap-6 xl:grid-cols-[1.7fr_0.8fr]">
-          <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-5 shadow-[0_1px_0_rgba(17,24,39,0.02)]">
+          <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-6 shadow-[0_1px_2px_rgba(17,24,39,0.02)]">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-[0.9rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+              <h2 className="text-scale-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
                 Live Satellite Constellation Feed
               </h2>
-              <span className="font-data text-[13px] text-[var(--color-text-tertiary)]">Auto-refresh: 60s</span>
+              <span className="font-data text-scale-xs text-[var(--color-text-tertiary)]">Auto-refresh: 60s</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-left">
                 <thead>
-                  <tr className="border-b border-[var(--color-border-subtle)] text-[13px] text-[var(--color-text-tertiary)]">
-                    <th className="pb-3 pr-4 font-medium">Satellite / Sensor</th>
-                    <th className="pb-3 pr-4 font-medium">Last Pass</th>
-                    <th className="pb-3 pr-4 font-medium">Ground Res.</th>
-                    <th className="pb-3 pr-4 font-medium">Anomalies</th>
-                    <th className="pb-3 font-medium">Status</th>
+                  <tr className="border-b border-[var(--color-border-subtle)] text-scale-xs text-[var(--color-text-tertiary)] uppercase tracking-wider">
+                    <th className="pb-3 pr-4 font-semibold">Satellite / Sensor</th>
+                    <th className="pb-3 pr-4 font-semibold">Last Pass</th>
+                    <th className="pb-3 pr-4 font-semibold">Ground Res.</th>
+                    <th className="pb-3 pr-4 font-semibold">Anomalies</th>
+                    <th className="pb-3 font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--color-border-subtle)] text-[14px]">
+                <tbody className="divide-y divide-[var(--color-border-subtle)] text-scale-sm">
                   {SATELLITE_PASSES.map((pass, i) => (
                     <tr key={i} className="hover:bg-[var(--color-surface)] transition-colors">
-                      <td className="py-3 pr-4 font-semibold text-[var(--color-text-primary)]">{pass.sat}</td>
-                      <td className="py-3 pr-4 font-data text-[var(--color-text-secondary)]">{pass.time}</td>
-                      <td className="py-3 pr-4 font-data text-[var(--color-text-secondary)]">{pass.resolution}</td>
-                      <td className="py-3 pr-4 font-data font-semibold text-[var(--color-text-primary)]">{pass.anomalies}</td>
-                      <td className="py-3">
-                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold text-emerald-700">
+                      <td className="py-3.5 pr-4 font-semibold text-[var(--color-text-primary)]">{pass.sat}</td>
+                      <td className="py-3.5 pr-4 font-data text-[var(--color-text-secondary)]">{pass.time}</td>
+                      <td className="py-3.5 pr-4 font-data text-[var(--color-text-secondary)]">{pass.resolution}</td>
+                      <td className="py-3.5 pr-4 font-data font-bold text-[var(--color-text-primary)] tabular-nums">{pass.anomalies}</td>
+                      <td className="py-3.5">
+                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-scale-xs font-semibold text-emerald-700">
                           {pass.status}
                         </span>
                       </td>
@@ -95,20 +95,20 @@ export default function Intelligence() {
             </div>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-5 shadow-[0_1px_0_rgba(17,24,39,0.02)]">
-            <h2 className="mb-4 text-[0.9rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+          <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-6 shadow-[0_1px_2px_rgba(17,24,39,0.02)] flex flex-col justify-between">
+            <h2 className="mb-4 text-scale-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
               Sensor Fusion Confidence
             </h2>
-            <div className="space-y-4">
+            <div className="space-y-4 my-auto">
               {[
                 ['Thermal-OSM Overlap', '94.2%', 'bg-[var(--color-accent)]'],
                 ['Temporal Persistence Score', '88.7%', 'bg-amber-500'],
                 ['Land-cover Class Purity', '91.0%', 'bg-emerald-600'],
               ].map(([label, value, bar]) => (
                 <div key={label}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-[0.78rem]">
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-scale-xs">
                     <span className="text-[var(--color-text-secondary)]">{label}</span>
-                    <span className="font-data font-semibold text-[var(--color-text-primary)]">{value}</span>
+                    <span className="font-data font-bold text-[var(--color-text-primary)] tabular-nums">{value}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]">
                     <div className={`h-full rounded-full ${bar}`} style={{ width: value }} />
@@ -117,19 +117,19 @@ export default function Intelligence() {
               ))}
             </div>
 
-            <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-4 text-[13px] text-[var(--color-text-secondary)]">
+            <div className="mt-6 border-t border-[var(--color-border-subtle)] pt-4 text-scale-sm text-[var(--color-text-secondary)]">
               <span>Model Ensemble:</span>
               <span className="ml-1 font-data font-semibold text-[var(--color-text-primary)]">XGBoost-Thermal + ViT-16</span>
             </div>
           </div>
         </motion.section>
 
-        <motion.section {...reveal} className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-5 shadow-[0_1px_0_rgba(17,24,39,0.02)]">
+        <motion.section {...reveal} className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-6 shadow-[0_1px_2px_rgba(17,24,39,0.02)]">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-[0.9rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+            <h2 className="text-scale-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
               Industrial Cluster Vulnerability Index
             </h2>
-            <span className="text-[13px] text-[var(--color-text-secondary)]">OSM cross-reference</span>
+            <span className="text-scale-xs text-[var(--color-text-secondary)]">OSM cross-reference</span>
           </div>
 
           <motion.div
@@ -137,7 +137,7 @@ export default function Intelligence() {
             whileInView={reduceMotion ? { opacity: 1 } : { opacity: 1 }}
             viewport={{ once: true, margin: '-60px' }}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
-            className="grid gap-3 lg:grid-cols-5"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
           >
             {INDUSTRIAL_CLUSTERS.map((cluster) => {
               const isSelected = selectedCluster.name === cluster.name;
@@ -149,28 +149,28 @@ export default function Intelligence() {
                   whileInView={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: '-50px' }}
                   transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
-                  className={`text-left rounded-[var(--radius-lg)] border p-3 transition-colors ${
+                  className={`text-left rounded-[var(--radius-lg)] border p-4 transition-all ${
                     isSelected
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] ring-1 ring-[var(--color-accent)]'
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] ring-1 ring-[var(--color-accent)] shadow-xs'
                       : 'border-[var(--color-border)] bg-white hover:bg-[var(--color-surface)]'
                   }`}
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[12px] text-[var(--color-text-secondary)]">{cluster.region}</span>
+                    <span className="text-scale-xs text-[var(--color-text-secondary)]">{cluster.region}</span>
                     <span
-                      className="rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold text-white font-data"
+                      className="rounded-full px-2 py-0.5 text-scale-xs font-bold text-white font-data tabular-nums"
                       style={{ backgroundColor: cluster.risk >= 75 ? RISK_COLORS.Critical : RISK_COLORS.High }}
                     >
                       {cluster.risk}
                     </span>
                   </div>
-                  <h3 className="mb-2 text-[14px] font-semibold text-[var(--color-text-primary)] leading-snug">
+                  <h3 className="mb-1.5 text-scale-sm font-bold text-[var(--color-text-primary)] leading-snug">
                     {cluster.name}
                   </h3>
-                  <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+                  <p className="text-scale-xs leading-relaxed text-[var(--color-text-secondary)] line-clamp-2">
                     {cluster.criticalInfra}
                   </p>
-                  <div className="mt-3 text-[12px] font-data text-[var(--color-text-secondary)]">
+                  <div className="mt-3 text-scale-xs font-data text-[var(--color-text-secondary)] tabular-nums">
                     {cluster.activeFires} active source{cluster.activeFires > 1 ? 's' : ''}
                   </div>
                 </motion.button>
@@ -178,58 +178,58 @@ export default function Intelligence() {
             })}
           </motion.div>
 
-          <div className="mt-5 grid gap-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:grid-cols-4">
+          <div className="mt-6 grid gap-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <span className="mb-1 block text-[0.72rem] text-[var(--color-text-tertiary)]">Cluster Focus</span>
-              <span className="text-[0.82rem] font-semibold text-[var(--color-text-primary)]">{selectedCluster.name}</span>
+              <span className="mb-1 block text-scale-xs text-[var(--color-text-tertiary)]">Cluster Focus</span>
+              <span className="text-scale-sm font-bold text-[var(--color-text-primary)]">{selectedCluster.name}</span>
             </div>
             <div>
-              <span className="mb-1 block text-[0.72rem] text-[var(--color-text-tertiary)]">Major Infrastructure</span>
-              <span className="text-[0.8rem] text-[var(--color-text-secondary)]">{selectedCluster.criticalInfra}</span>
+              <span className="mb-1 block text-scale-xs text-[var(--color-text-tertiary)]">Major Infrastructure</span>
+              <span className="text-scale-sm text-[var(--color-text-secondary)]">{selectedCluster.criticalInfra}</span>
             </div>
             <div>
-              <span className="mb-1 block text-[0.72rem] text-[var(--color-text-tertiary)]">Exposure Buffer</span>
-              <span className="font-data text-[0.8rem] font-semibold text-amber-700">{selectedCluster.buffer}</span>
+              <span className="mb-1 block text-scale-xs text-[var(--color-text-tertiary)]">Exposure Buffer</span>
+              <span className="font-data text-scale-sm font-semibold text-amber-700 tabular-nums">{selectedCluster.buffer}</span>
             </div>
             <div>
-              <span className="mb-1 block text-[0.72rem] text-[var(--color-text-tertiary)]">Active Hotspots</span>
-              <span className="font-data text-[0.8rem] font-semibold text-[var(--color-text-primary)]">{selectedCluster.activeFires} Detected</span>
+              <span className="mb-1 block text-scale-xs text-[var(--color-text-tertiary)]">Active Hotspots</span>
+              <span className="font-data text-scale-sm font-semibold text-[var(--color-text-primary)] tabular-nums">{selectedCluster.activeFires} Detected</span>
             </div>
           </div>
         </motion.section>
 
-        <motion.section {...reveal} className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-5 shadow-[0_1px_0_rgba(17,24,39,0.02)]">
+        <motion.section {...reveal} className="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-white p-6 shadow-[0_1px_2px_rgba(17,24,39,0.02)]">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-[0.9rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
+            <h2 className="text-scale-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
               Persistent Thermal Sources (&gt;48h Duration)
             </h2>
-            <span className="font-data text-[0.74rem] text-[var(--color-text-secondary)]">
+            <span className="font-data text-scale-xs text-[var(--color-text-secondary)] tabular-nums">
               {persistentAnomalies.length} sources monitored
             </span>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {persistentAnomalies.slice(0, 6).map((event) => {
               const p = event.properties;
               return (
                 <div
                   key={p.id}
                   onClick={() => selectEvent(p.id)}
-                  className="cursor-pointer rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-accent)]"
+                  className="cursor-pointer rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all hover:border-[var(--color-accent)] hover:shadow-xs"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="font-data text-[0.74rem] font-semibold text-[var(--color-text-primary)]">{p.id}</span>
+                    <span className="font-data text-scale-sm font-bold text-[var(--color-text-primary)]">{p.id}</span>
                     <span
-                      className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold text-white"
+                      className="rounded-full px-2 py-0.5 text-scale-xs font-semibold text-white"
                       style={{ backgroundColor: getCategoryColor(p.category) }}
                     >
                       {getCategoryShort(p.category)}
                     </span>
                   </div>
-                  <div className="mb-2 text-[0.8rem] font-medium text-[var(--color-text-primary)]">{p.region}</div>
-                  <div className="flex items-center justify-between gap-2 text-[0.73rem] text-[var(--color-text-secondary)]">
-                    <span className="font-data font-medium text-amber-800">{formatDuration(p.persistence_hours)} active</span>
-                    <span className="font-data">{p.frp} MW FRP</span>
+                  <div className="mb-2 text-scale-sm font-medium text-[var(--color-text-primary)]">{p.region}</div>
+                  <div className="flex items-center justify-between gap-2 text-scale-xs text-[var(--color-text-secondary)]">
+                    <span className="font-data font-medium text-amber-800 tabular-nums">{formatDuration(p.persistence_hours)} active</span>
+                    <span className="font-data tabular-nums">{p.frp} MW FRP</span>
                   </div>
                 </div>
               );
@@ -240,3 +240,4 @@ export default function Intelligence() {
     </div>
   );
 }
+

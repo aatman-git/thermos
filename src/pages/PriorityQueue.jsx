@@ -18,6 +18,7 @@ export default function PriorityQueue() {
   const selectedEventId = useStore((s) => s.selectedEventId);
 
   const [confidenceLocal, setConfidenceLocal] = useState(filters.confidenceMin);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const events = getFilteredEvents();
 
@@ -48,25 +49,49 @@ export default function PriorityQueue() {
   };
 
   return (
-    <div className="flex h-full bg-[var(--color-surface)]">
+    <div className="flex flex-col md:flex-row h-full bg-[var(--color-surface)] overflow-hidden">
+      {/* Mobile filter toggle bar */}
+      <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-[var(--color-border)] shrink-0">
+        <button
+          onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+          className="flex items-center gap-2 px-3 py-1.5 text-scale-sm font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-text-primary)]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          {mobileFilterOpen ? 'Hide Filters' : 'Filter Events'}
+          {(filters.categories.length > 0 || filters.riskTiers.length > 0 || filters.confidenceMin > 0) && (
+            <span className="w-2 h-2 rounded-full bg-[var(--color-accent)]" />
+          )}
+        </button>
+        <span className="font-data text-scale-xs text-[var(--color-text-secondary)]">
+          <strong className="text-[var(--color-text-primary)]">{events.length}</strong> events logged
+        </span>
+      </div>
+
       {/* Filter sidebar */}
-      <aside className="w-[260px] shrink-0 overflow-y-auto border-r border-[var(--color-border)] bg-white p-5 flex flex-col gap-6">
+      <aside
+        className={`
+          w-full md:w-[280px] shrink-0 overflow-y-auto border-r border-[var(--color-border)] bg-white p-6 flex flex-col gap-6
+          ${mobileFilterOpen ? 'block max-h-[60vh] border-b md:border-b-0' : 'hidden md:flex'}
+        `}
+      >
         <div className="flex items-center justify-between">
-          <h2 className="text-[14px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
-            Filters
+          <h2 className="text-scale-sm font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            Triage Filters
           </h2>
           <button
             onClick={resetFilters}
-            className="text-[13px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="text-scale-xs font-medium text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
-            Reset
+            Reset All
           </button>
         </div>
 
         {/* Confidence threshold */}
         <div>
-          <label className="mb-2 block text-[14px] text-[var(--color-text-secondary)]">
-            Min Confidence: <span className="font-data font-semibold text-[var(--color-text-primary)]">{confidenceLocal}%</span>
+          <label className="mb-2 block text-scale-sm text-[var(--color-text-secondary)]">
+            Min Confidence: <span className="font-data font-bold text-[var(--color-text-primary)] tabular-nums">{confidenceLocal}%</span>
           </label>
           <input
             type="range"
@@ -76,22 +101,22 @@ export default function PriorityQueue() {
             onChange={(e) => setConfidenceLocal(Number(e.target.value))}
             onMouseUp={() => setFilter('confidenceMin', confidenceLocal)}
             onTouchEnd={() => setFilter('confidenceMin', confidenceLocal)}
-            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-border)] accent-[var(--color-accent)]"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-border)] accent-[var(--color-accent)]"
           />
         </div>
 
         {/* Date range */}
         <div>
-          <h3 className="mb-2 text-[14px] text-[var(--color-text-secondary)]">Date Range</h3>
+          <h3 className="mb-2 text-scale-sm font-medium text-[var(--color-text-secondary)]">Time Range</h3>
           <div className="flex flex-wrap gap-2">
             {['24H', '7D', '30D'].map((range) => (
               <button
                 key={range}
                 type="button"
                 onClick={() => setFilter('dateRange', range)}
-                className={`rounded-[var(--radius-md)] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                className={`rounded-[var(--radius-md)] px-3 py-1.5 text-scale-xs font-semibold transition-colors ${
                   filters.dateRange === range
-                    ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)]'
+                    ? 'bg-[var(--color-accent)] text-[var(--color-text-primary)] shadow-xs'
                     : 'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
@@ -103,7 +128,7 @@ export default function PriorityQueue() {
 
         {/* Classification checkboxes */}
         <div>
-          <h3 className="mb-2 text-[14px] text-[var(--color-text-secondary)]">Classification</h3>
+          <h3 className="mb-2.5 text-scale-sm font-medium text-[var(--color-text-secondary)]">Classification</h3>
           <div className="space-y-2">
             {CATEGORIES.map((cat) => (
               <label key={cat} className="group flex cursor-pointer items-center gap-2.5">
@@ -114,7 +139,7 @@ export default function PriorityQueue() {
                   className="sr-only"
                 />
                 <span
-                  className={`flex h-3.5 w-3.5 items-center justify-center rounded border-2 transition-colors ${
+                  className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
                     filters.categories.length === 0 || filters.categories.includes(cat)
                       ? 'border-transparent'
                       : 'border-[var(--color-border)]'
@@ -127,12 +152,12 @@ export default function PriorityQueue() {
                   }}
                 >
                   {(filters.categories.length === 0 || filters.categories.includes(cat)) && (
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
                 </span>
-                <span className="text-[14px] text-[var(--color-text-primary)] group-hover:text-[var(--color-text-primary)]">
+                <span className="text-scale-sm text-[var(--color-text-primary)] group-hover:text-[var(--color-text-primary)]">
                   {getCategoryShort(cat)}
                 </span>
               </label>
@@ -142,7 +167,7 @@ export default function PriorityQueue() {
 
         {/* Risk tier checkboxes */}
         <div>
-          <h3 className="mb-2 text-[14px] text-[var(--color-text-secondary)]">Risk Tier</h3>
+          <h3 className="mb-2.5 text-scale-sm font-medium text-[var(--color-text-secondary)]">Risk Tier</h3>
           <div className="space-y-2">
             {RISK_TIERS.map((tier) => (
               <label key={tier} className="group flex cursor-pointer items-center gap-2.5">
@@ -153,7 +178,7 @@ export default function PriorityQueue() {
                   className="sr-only"
                 />
                 <span
-                  className={`flex h-3.5 w-3.5 items-center justify-center rounded border-2 transition-colors ${
+                  className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
                     filters.riskTiers.length === 0 || filters.riskTiers.includes(tier)
                       ? 'border-transparent'
                       : 'border-[var(--color-border)]'
@@ -166,12 +191,12 @@ export default function PriorityQueue() {
                   }}
                 >
                   {(filters.riskTiers.length === 0 || filters.riskTiers.includes(tier)) && (
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
                 </span>
-                <span className="text-[14px] text-[var(--color-text-primary)]">{tier}</span>
+                <span className="text-scale-sm text-[var(--color-text-primary)]">{tier}</span>
               </label>
             ))}
           </div>
@@ -179,36 +204,36 @@ export default function PriorityQueue() {
 
         {/* Result count */}
         <div className="mt-auto border-t border-[var(--color-border-subtle)] pt-4">
-          <span className="text-[13px] text-[var(--color-text-tertiary)]">
-            Showing <span className="font-data font-semibold text-[var(--color-text-primary)]">{events.length}</span> events
+          <span className="text-scale-xs text-[var(--color-text-tertiary)]">
+            Showing <span className="font-data font-bold text-[var(--color-text-primary)] tabular-nums">{events.length}</span> active incidents
           </span>
         </div>
       </aside>
 
       {/* Event list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         {events.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-6 p-5">
+          <div className="space-y-6 max-w-5xl">
             {RISK_TIERS.map((tier) => {
               const tierEvents = grouped[tier];
               if (!tierEvents || tierEvents.length === 0) return null;
               return (
-                <section key={tier}>
-                  <div className="mb-3 flex items-center gap-2.5">
+                <section key={tier} className="space-y-3">
+                  <div className="flex items-center gap-2.5">
                     <span
-                      className="h-2.5 w-2.5 rounded-full"
+                      className="h-3 w-3 rounded-full shrink-0"
                       style={{ backgroundColor: getRiskColor(tier) }}
                     />
-                    <h2 className="text-[14px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">
-                      {tier}
+                    <h2 className="text-scale-sm font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                      {tier} Risk Level
                     </h2>
-                    <span className="font-data text-[13px] text-[var(--color-text-tertiary)]">
+                    <span className="font-data text-scale-xs px-2 py-0.5 rounded-full bg-white border border-[var(--color-border)] text-[var(--color-text-tertiary)] tabular-nums">
                       {tierEvents.length}
                     </span>
                   </div>
-                  <div className="grid gap-2.5">
+                  <div className="grid gap-3">
                     {tierEvents.map((event) => (
                       <EventCard
                         key={event.properties.id}
@@ -235,43 +260,43 @@ function EventCard({ event, isSelected, onSelect }) {
     <button
       onClick={onSelect}
       className={`
-        w-full rounded-[var(--radius-lg)] border p-3.5 text-left transition-colors
+        w-full rounded-[var(--radius-lg)] border p-4 text-left transition-all
         ${isSelected
-          ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
-          : 'border-[var(--color-border)] bg-white hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]'
+          ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] shadow-xs'
+          : 'border-[var(--color-border)] bg-white hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface)]'
         }
       `}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-data text-[14px] font-semibold text-[var(--color-text-primary)]">{p.id}</span>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="font-data text-scale-base font-bold text-[var(--color-text-primary)]">{p.id}</span>
           <span
-            className="rounded-full px-1.5 py-0.5 text-[12px] font-semibold text-white"
+            className="rounded-full px-2 py-0.5 text-scale-xs font-semibold text-white"
             style={{ backgroundColor: getCategoryColor(p.category) }}
           >
             {getCategoryShort(p.category)}
           </span>
         </div>
-        <span className="font-data text-[13px] text-[var(--color-text-secondary)]">{p.region}</span>
+        <span className="font-data text-scale-xs text-[var(--color-text-secondary)]">{p.region}</span>
       </div>
 
-      <div className="mb-2 flex items-center gap-2.5">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface)]">
+      <div className="mb-2 flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-surface)] border border-[var(--color-border-subtle)]">
           <div
-            className="h-full rounded-full transition-all"
+            className="h-full rounded-full transition-all duration-300"
             style={{ width: `${p.risk_score}%`, backgroundColor: getRiskColor(p.risk_tier) }}
           />
         </div>
-        <span className="font-data text-[13px] font-semibold" style={{ color: getRiskColor(p.risk_tier) }}>
+        <span className="font-data text-scale-sm font-bold tabular-nums" style={{ color: getRiskColor(p.risk_tier) }}>
           {p.risk_score}
         </span>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <span className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-scale-xs text-[var(--color-text-secondary)]">
+        <span className="line-clamp-1">
           {buildReasonString(p.evidence)}
         </span>
-        <span className="ml-2 shrink-0 font-data text-[13px] text-[var(--color-text-secondary)]">
+        <span className="shrink-0 font-data font-semibold text-[var(--color-text-primary)] tabular-nums">
           {p.persistence_hours > 48
             ? `${formatDuration(p.persistence_hours)} persistent`
             : `${p.frp} MW FRP`
@@ -284,17 +309,18 @@ function EventCard({ event, isSelected, onSelect }) {
 
 function EmptyState() {
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center px-6">
+    <div className="flex items-center justify-center h-64 text-center p-6">
+      <div>
         <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </div>
-        <p className="text-sm text-[var(--color-text-primary)] font-medium mb-1">No events match filters</p>
-        <p className="text-[14px] text-[var(--color-text-tertiary)]">Try adjusting your confidence threshold or classification filters.</p>
+        <p className="text-scale-base text-[var(--color-text-primary)] font-semibold mb-1">No events match filters</p>
+        <p className="text-scale-sm text-[var(--color-text-tertiary)]">Try adjusting your confidence threshold or classification filters.</p>
       </div>
     </div>
   );
 }
+
