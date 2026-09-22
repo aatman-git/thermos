@@ -1,15 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-// Monitored thermal hotspots matching telemetry
+// Globally distributed thermal hotspots across multiple continents
+// Mix of Red (Critical Fire) & Amber/Yellow (Industrial Warning)
 const HOTSPOTS = [
-  { lat: 22.4707, lng: 70.0577, name: 'Jamnagar Flare Complex', primary: true, beamLength: 0.22 },
-  { lat: 24.1200, lng: 82.6700, name: 'Singrauli Super Thermal', primary: false, beamLength: 0.19 },
-  { lat: 28.6139, lng: 77.2090, name: 'NCR Thermal Cluster', primary: false, beamLength: 0.18 },
-  { lat: 17.6868, lng: 83.2185, name: 'Vizag Industrial Zone', primary: false, beamLength: 0.16 },
-  { lat: 19.0760, lng: 72.8777, name: 'Mumbai Industrial', primary: false, beamLength: 0.17 },
-  { lat: 23.6693, lng: 86.1511, name: 'Bokaro Thermal Plant', primary: false, beamLength: 0.19 },
-  { lat: 20.3164, lng: 86.6085, name: 'Paradip Petrochem', primary: false, beamLength: 0.16 },
+  // Asia
+  { lat: 22.4707, lng: 70.0577, color: '#DC2626', name: 'Jamnagar Petrochem, South Asia' },
+  { lat: 23.6693, lng: 86.1511, color: '#F5C518', name: 'Bokaro Thermal Complex, India' },
+  { lat: -1.2500, lng: 102.3000, color: '#DC2626', name: 'Sumatra Peatland Fire, Indonesia' },
+  { lat: -2.9500, lng: 114.5000, color: '#F5C518', name: 'Kalimantan Thermal Spot, Indonesia' },
+  { lat: 56.5000, lng: 94.2000, color: '#DC2626', name: 'Siberian Taiga Fire, Russia' },
+
+  // Africa
+  { lat: -7.8000, lng: 22.5000, color: '#DC2626', name: 'Congo Basin Savanna Fire, DRC' },
+  { lat: 4.8500, lng: 6.9500, color: '#F5C518', name: 'Niger Delta Flare Cluster, West Africa' },
+  { lat: -12.5000, lng: 25.0000, color: '#DC2626', name: 'Zambia Miombo Fire, Africa' },
+  { lat: 31.8000, lng: 5.4000, color: '#F5C518', name: 'Hassi Messaoud Flare, Algeria' },
+
+  // Europe
+  { lat: 38.5000, lng: -3.7000, color: '#DC2626', name: 'Iberian Peninsula Thermal, Spain' },
+  { lat: 37.8000, lng: 22.4000, color: '#DC2626', name: 'Peloponnese Anomaly, Greece' },
+
+  // North America
+  { lat: 39.7500, lng: -121.6000, color: '#DC2626', name: 'Sierra Thermal Anomaly, California' },
+  { lat: 29.7604, lng: -95.3698, color: '#F5C518', name: 'Gulf Coast Industrial Zone, Texas' },
+  { lat: 54.8000, lng: -115.5000, color: '#DC2626', name: 'Alberta Boreal Fire, Canada' },
+
+  // South America
+  { lat: -11.5000, lng: -55.5000, color: '#DC2626', name: 'Mato Grosso Active Fire, Brazil' },
+  { lat: -17.8000, lng: -57.2000, color: '#DC2626', name: 'Pantanal Wetland Hotspot, Brazil' },
+  { lat: -26.0000, lng: -60.5000, color: '#F5C518', name: 'Gran Chaco Thermal Spot, Argentina' },
+
+  // Australia
+  { lat: -14.8000, lng: 133.2000, color: '#DC2626', name: 'Katherine Savanna Anomaly, Australia' },
+  { lat: -21.1500, lng: 119.7500, color: '#F5C518', name: 'Pilbara Mining Thermal, Australia' },
+  { lat: -19.4000, lng: 145.2000, color: '#DC2626', name: 'Queensland Bushfire Ping, Australia' },
 ];
 
 function isWebGLAvailable() {
@@ -71,33 +96,33 @@ export default function GlobeCanvas() {
     const globeGroup = new THREE.Group();
     masterTiltGroup.add(globeGroup);
 
-    // 2. Base Sphere: Dark Navy Translucent Sphere with Flat Continent Silhouettes
+    // 2. Base Sphere: Clean light translucent sphere with warm landmass silhouettes
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 1024;
     const ctx = canvas.getContext('2d');
 
-    // Base dark ocean matching page tonal range
-    ctx.fillStyle = '#0c1017';
+    // Base light ocean matching Main Website's #FAFAF8 surface
+    ctx.fillStyle = '#FAFAF8';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const canvasTexture = new THREE.CanvasTexture(canvas);
     canvasTexture.colorSpace = THREE.SRGBColorSpace;
 
-    // Load vector equirectangular landmass SVG (Natural Earth 110m silhouettes)
+    // Load vector equirectangular light landmass SVG
     const landImg = new Image();
     landImg.onload = () => {
       ctx.drawImage(landImg, 0, 0, canvas.width, canvas.height);
       canvasTexture.needsUpdate = true;
       renderer.render(scene, camera);
     };
-    landImg.src = '/media/earth_vector_land.svg';
+    landImg.src = '/media/earth_vector_land_light.svg';
 
     const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
     const sphereMaterial = new THREE.MeshBasicMaterial({
       map: canvasTexture,
       transparent: true,
-      opacity: 0.94,
+      opacity: 0.98,
     });
     const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
     globeGroup.add(sphereMesh);
@@ -110,28 +135,28 @@ export default function GlobeCanvas() {
     }
     const rimGeo = new THREE.BufferGeometry().setFromPoints(rimPoints);
     const rimMat = new THREE.LineBasicMaterial({
-      color: '#7ec8f2',
+      color: '#D8D4CA',
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.55,
       depthWrite: false,
     });
     const rimLine = new THREE.Line(rimGeo, rimMat);
     scene.add(rimLine);
 
-    // 4. 3D Wireframe Grid Lines (Latitude Parallels & Longitude Meridians)
+    // 4. Subtle 3D Wireframe Grid Lines (Properly clamped on the 1.002 sphere surface)
     const gridGroup = new THREE.Group();
     const gridMat = new THREE.LineBasicMaterial({
-      color: '#7ec8f2',
+      color: '#C8C4B8',
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.25,
       depthWrite: false,
     });
 
-    // Parallels (every 15 degrees)
-    for (let lat = -75; lat <= 75; lat += 15) {
+    // Parallels (every 20 degrees)
+    for (let lat = -60; lat <= 60; lat += 20) {
       const phi = (90 - lat) * (Math.PI / 180);
-      const r = 1.003 * Math.sin(phi);
-      const y = 1.003 * Math.cos(phi);
+      const r = 1.002 * Math.sin(phi);
+      const y = 1.002 * Math.cos(phi);
       const points = [];
       const segments = 64;
       for (let i = 0; i <= segments; i++) {
@@ -142,15 +167,15 @@ export default function GlobeCanvas() {
       gridGroup.add(new THREE.Line(geo, gridMat));
     }
 
-    // Meridians (every 22.5 degrees)
-    for (let lng = 0; lng < 360; lng += 22.5) {
+    // Meridians (every 30 degrees, mathematically exact on sphere surface)
+    for (let lng = 0; lng < 360; lng += 30) {
       const theta = (lng * Math.PI) / 180;
       const points = [];
       const segments = 64;
       for (let i = 0; i <= segments; i++) {
         const lat = (i / segments) * Math.PI - Math.PI / 2;
-        const y = 1.003 * Math.sin(lat);
-        const r = 1.003 * Math.cos(lat);
+        const y = 1.002 * Math.sin(lat);
+        const r = 1.002 * Math.cos(lat);
         points.push(new THREE.Vector3(r * Math.sin(theta), y, r * Math.cos(theta)));
       }
       const geo = new THREE.BufferGeometry().setFromPoints(points);
@@ -158,180 +183,129 @@ export default function GlobeCanvas() {
     }
     globeGroup.add(gridGroup);
 
-    // 5. Thermal Hotspots: Glowing Beacons, Translucent Outer Halos & Radiant Beams
+    // 5. Standalone Hotspot Markers: Randomly spread across continents (Red + Amber)
     const hotspotsGroup = new THREE.Group();
-    const pulseRings = [];
+    const hotspotInstances = [];
 
-    HOTSPOTS.forEach((pt) => {
+    HOTSPOTS.forEach((pt, index) => {
       const phi = (90 - pt.lat) * (Math.PI / 180);
       const theta = (pt.lng + 180) * (Math.PI / 180);
 
-      const radius = 1.004;
+      const radius = 1.005;
       const x = -(radius * Math.sin(phi) * Math.cos(theta));
       const z = radius * Math.sin(phi) * Math.sin(theta);
       const y = radius * Math.cos(phi);
 
       const normal = new THREE.Vector3(x, y, z).normalize();
 
-      // Glowing outer translucent halo disc on the surface
-      const haloGeo = new THREE.RingGeometry(0, pt.primary ? 0.052 : 0.038, 32);
+      // Outer soft pulsing halo disc on the globe surface
+      const haloGeo = new THREE.RingGeometry(0, 0.046, 32);
       const haloMat = new THREE.MeshBasicMaterial({
-        color: '#ff5a1f',
+        color: pt.color,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.25,
+        opacity: 0.38,
         depthWrite: false,
       });
       const haloMesh = new THREE.Mesh(haloGeo, haloMat);
       haloMesh.position.set(x * 1.002, y * 1.002, z * 1.002);
       haloMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
       hotspotsGroup.add(haloMesh);
-      pulseRings.push(haloMesh);
 
-      // Solid inner orange beacon dot
-      const pointGeo = new THREE.SphereGeometry(pt.primary ? 0.022 : 0.016, 16, 16);
-      const pointMat = new THREE.MeshBasicMaterial({ color: '#ff5a1f' });
+      // Solid standalone beacon dot (Red #DC2626 or Amber #F5C518)
+      const pointGeo = new THREE.SphereGeometry(0.018, 16, 16);
+      const pointMat = new THREE.MeshBasicMaterial({
+        color: pt.color,
+        transparent: true,
+        opacity: 1,
+      });
       const pointMesh = new THREE.Mesh(pointGeo, pointMat);
       pointMesh.position.set(x, y, z);
       hotspotsGroup.add(pointMesh);
 
-      // White-hot core
-      const coreGeo = new THREE.SphereGeometry(pt.primary ? 0.010 : 0.007, 12, 12);
-      const coreMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+      // Bright white thermal center core
+      const coreGeo = new THREE.SphereGeometry(0.008, 12, 12);
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: '#FFFFFF',
+        transparent: true,
+        opacity: 1,
+      });
       const coreMesh = new THREE.Mesh(coreGeo, coreMat);
       coreMesh.position.set(x, y, z);
       hotspotsGroup.add(coreMesh);
 
-      // Radiant outward directional spike beam (Strictly originates from base dot)
-      const beamLength = pt.beamLength || 0.18;
-      const endPos = new THREE.Vector3(
-        x + normal.x * beamLength,
-        y + normal.y * beamLength,
-        z + normal.z * beamLength
-      );
-
-      const beamGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(x, y, z),
-        endPos,
-      ]);
-      const beamMat = new THREE.LineBasicMaterial({
-        color: '#ff5a1f',
-        transparent: true,
-        opacity: 0.95,
+      hotspotInstances.push({
+        index,
+        normal,
+        haloMesh,
+        pointMesh,
+        coreMesh,
       });
-      const beamLine = new THREE.Line(beamGeo, beamMat);
-      hotspotsGroup.add(beamLine);
-
-      // Tip node
-      const tipGeo = new THREE.SphereGeometry(0.006, 8, 8);
-      const tipMat = new THREE.MeshBasicMaterial({ color: '#ff5a1f' });
-      const tipMesh = new THREE.Mesh(tipGeo, tipMat);
-      tipMesh.position.copy(endPos);
-      hotspotsGroup.add(tipMesh);
-
-      // If primary hotspot (Jamnagar active anomaly), add dashed leader line pointing toward HUD card
-      if (pt.primary) {
-        // Dashed connector line with a cross-tick toward bottom-right HUD
-        const targetPoint = new THREE.Vector3(
-          x + normal.x * 0.28 + 0.15,
-          y - 0.25,
-          z + 0.1
-        );
-        const leaderCurve = [
-          new THREE.Vector3(x, y, z),
-          targetPoint,
-        ];
-        const leaderGeo = new THREE.BufferGeometry().setFromPoints(leaderCurve);
-        const leaderMat = new THREE.LineDashedMaterial({
-          color: '#ff5a1f',
-          dashSize: 0.03,
-          gapSize: 0.025,
-          transparent: true,
-          opacity: 0.55,
-        });
-        const leaderLine = new THREE.Line(leaderGeo, leaderMat);
-        leaderLine.computeLineDistances();
-        hotspotsGroup.add(leaderLine);
-
-        // Small cross-tick on the dashed leader line
-        const midPoint = new THREE.Vector3().lerpVectors(new THREE.Vector3(x, y, z), targetPoint, 0.45);
-        const tickGeo = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(midPoint.x - 0.025, midPoint.y + 0.035, midPoint.z),
-          new THREE.Vector3(midPoint.x + 0.025, midPoint.y - 0.035, midPoint.z),
-        ]);
-        const tickMat = new THREE.LineBasicMaterial({
-          color: '#ff5a1f',
-          transparent: true,
-          opacity: 0.65,
-        });
-        const tickLine = new THREE.Line(tickGeo, tickMat);
-        hotspotsGroup.add(tickLine);
-      }
     });
 
     globeGroup.add(hotspotsGroup);
 
-    // 6. Wireframe Satellite Icon along Dashed Elliptical LEO Orbit
-    const satelliteGroup = new THREE.Group();
+    // 6. Orbiting Satellite and Dashed Orbit Track
+    const orbitRadius = 1.22;
+    const orbitGroup = new THREE.Group();
 
-    // Central avionics chassis: wireframe box
-    const satChassisEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.024, 0.024, 0.036));
-    const satLineMat = new THREE.LineBasicMaterial({
-      color: '#cbd5e1',
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false,
-    });
-    const satChassis = new THREE.LineSegments(satChassisEdges, satLineMat);
-    satelliteGroup.add(satChassis);
-
-    // Left and right solar array panel frames with center divider grid
-    const panelPoints = [
-      // Left solar wing
-      new THREE.Vector3(-0.012, 0, -0.014), new THREE.Vector3(-0.056, 0, -0.014),
-      new THREE.Vector3(-0.056, 0, -0.014), new THREE.Vector3(-0.056, 0, 0.014),
-      new THREE.Vector3(-0.056, 0, 0.014), new THREE.Vector3(-0.012, 0, 0.014),
-      new THREE.Vector3(-0.034, 0, -0.014), new THREE.Vector3(-0.034, 0, 0.014), // divider line
-      // Right solar wing
-      new THREE.Vector3(0.012, 0, -0.014), new THREE.Vector3(0.056, 0, -0.014),
-      new THREE.Vector3(0.056, 0, -0.014), new THREE.Vector3(0.056, 0, 0.014),
-      new THREE.Vector3(0.056, 0, 0.014), new THREE.Vector3(0.012, 0, 0.014),
-      new THREE.Vector3(0.034, 0, -0.014), new THREE.Vector3(0.034, 0, 0.014), // divider line
-    ];
-    const panelGeo = new THREE.BufferGeometry().setFromPoints(panelPoints);
-    const panelLines = new THREE.LineSegments(panelGeo, satLineMat);
-    satelliteGroup.add(panelLines);
-
-    masterTiltGroup.add(satelliteGroup);
-
-    // Dashed Orbit Elliptical Line (LEO altitude radius ~1.18)
-    const orbitRadius = 1.18;
+    // Dashed orbital track
     const orbitPoints = [];
     const orbitSegments = 128;
     for (let i = 0; i <= orbitSegments; i++) {
       const t = (i / orbitSegments) * Math.PI * 2;
       orbitPoints.push(new THREE.Vector3(
         Math.cos(t) * orbitRadius,
-        Math.sin(t) * orbitRadius * 0.35,
-        Math.sin(t) * orbitRadius * 0.94
+        Math.sin(t) * orbitRadius * 0.32,
+        Math.sin(t) * orbitRadius * 0.95
       ));
     }
     const orbitGeo = new THREE.BufferGeometry().setFromPoints(orbitPoints);
     const orbitMat = new THREE.LineDashedMaterial({
-      color: '#7ec8f2',
+      color: '#94A3B8',
       dashSize: 0.035,
-      gapSize: 0.028,
+      gapSize: 0.025,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.35,
     });
     const orbitLine = new THREE.Line(orbitGeo, orbitMat);
     orbitLine.computeLineDistances();
-    masterTiltGroup.add(orbitLine);
+    orbitGroup.add(orbitLine);
 
-    // Initial orientation: Centered gracefully on India & active South Asia thermal clusters
+    // Satellite model (Central bus + dual solar array wings)
+    const satellite = new THREE.Group();
+
+    // Main bus body
+    const bodyGeo = new THREE.BoxGeometry(0.022, 0.022, 0.032);
+    const bodyMat = new THREE.MeshBasicMaterial({ color: '#1A1A17' });
+    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    satellite.add(bodyMesh);
+
+    // Gold thermal foil accent on bus
+    const foilGeo = new THREE.BoxGeometry(0.016, 0.016, 0.034);
+    const foilMat = new THREE.MeshBasicMaterial({ color: '#F5C518' });
+    const foilMesh = new THREE.Mesh(foilGeo, foilMat);
+    satellite.add(foilMesh);
+
+    // Left solar panel wing
+    const panelGeo = new THREE.BoxGeometry(0.048, 0.003, 0.022);
+    const panelMat = new THREE.MeshBasicMaterial({ color: '#2563EB' });
+    const leftPanel = new THREE.Mesh(panelGeo, panelMat);
+    leftPanel.position.set(-0.038, 0, 0);
+    satellite.add(leftPanel);
+
+    // Right solar panel wing
+    const rightPanel = new THREE.Mesh(panelGeo, panelMat);
+    rightPanel.position.set(0.038, 0, 0);
+    satellite.add(rightPanel);
+
+    orbitGroup.add(satellite);
+    masterTiltGroup.add(orbitGroup);
+
+    // Initial orientation: Centered gracefully on South Asia & Indian Ocean
     globeGroup.rotation.y = 1.32;
 
-    // 7. Interactive 3D Rotation Controls (Mouse & Touch Trackball Feel)
+    // 7. Interactive 3D Rotation Controls
     let isDragging = false;
     let previousPos = { x: 0, y: 0 };
 
@@ -380,7 +354,7 @@ export default function GlobeCanvas() {
     window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('touchend', onTouchEnd);
 
-    // 8. Animation Loop (True 3D Rotation with Subtle Axial Precession & Satellite Glide)
+    // 8. 3-Axis Dynamic Orbital Rotation Animation Loop (Task + User Request)
     const clock = new THREE.Clock();
     let animId;
     let isVisible = true;
@@ -391,41 +365,58 @@ export default function GlobeCanvas() {
 
       const elapsedTime = clock.getElapsedTime();
 
-      // Continuous 3D rotation around tilted Earth axis
+      // Continuous 3D rotation on 3 axes:
+      // Axis 1 (Y): Continuous planetary spin
+      // Axis 2 (X): Earth axial tilt nutation
+      // Axis 3 (Z): Orbital precession wobble
       if (!isDragging && !prefersReducedMotion) {
-        globeGroup.rotation.y += 0.0016;
-        // Subtle 3D nutation wobble
-        masterTiltGroup.rotation.x = 0.22 + Math.sin(elapsedTime * 0.25) * 0.035;
+        globeGroup.rotation.y += 0.0022;
+        masterTiltGroup.rotation.x = 0.22 + Math.sin(elapsedTime * 0.35) * 0.08;
+        masterTiltGroup.rotation.z = (23.5 * Math.PI / 180) + Math.cos(elapsedTime * 0.25) * 0.04;
       }
 
-      // Animate pulsing radar rings on the surface
-      pulseRings.forEach((ring, idx) => {
-        const s = 1 + Math.sin(elapsedTime * 3 + idx) * 0.25;
-        ring.scale.set(s, s, s);
-        ring.material.opacity = 0.28 - (s - 0.75) * 0.15;
-      });
+      // Satellite orbiting smoothly around the Earth
+      const satSpeed = elapsedTime * 0.45;
+      const satX = Math.cos(satSpeed) * orbitRadius;
+      const satY = Math.sin(satSpeed) * orbitRadius * 0.32;
+      const satZ = Math.sin(satSpeed) * orbitRadius * 0.95;
+      satellite.position.set(satX, satY, satZ);
 
-      // Animate wireframe satellite gliding smoothly along the orbit
-      const satAngle = elapsedTime * 0.40;
-      const satX = Math.cos(satAngle) * orbitRadius;
-      const satY = Math.sin(satAngle) * orbitRadius * 0.35;
-      const satZ = Math.sin(satAngle) * orbitRadius * 0.94;
-      satelliteGroup.position.set(satX, satY, satZ);
-
-      // Align satellite along flight tangent vector
+      // Tangent alignment along flight path
       const tangent = new THREE.Vector3(
-        -Math.sin(satAngle) * orbitRadius,
-        Math.cos(satAngle) * orbitRadius * 0.35,
-        Math.cos(satAngle) * orbitRadius * 0.94
+        -Math.sin(satSpeed) * orbitRadius,
+        Math.cos(satSpeed) * orbitRadius * 0.32,
+        Math.cos(satSpeed) * orbitRadius * 0.95
       ).normalize();
-      satelliteGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+      satellite.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+
+      // Hotspot depth scaling & rotation fading
+      hotspotInstances.forEach((pt) => {
+        const normalWorld = pt.normal.clone()
+          .applyQuaternion(globeGroup.quaternion)
+          .applyQuaternion(masterTiltGroup.quaternion);
+
+        const facing = normalWorld.z;
+        const isFacing = facing > 0;
+        const depth = isFacing ? Math.max(0, Math.min(1, (facing - 0.05) / 0.35)) : 0;
+
+        const pulse = 1 + Math.sin(elapsedTime * 3.2 + pt.index * 0.6) * 0.35;
+        const ringScale = pulse * depth;
+        pt.haloMesh.scale.set(ringScale, ringScale, ringScale);
+        pt.haloMesh.material.opacity = (0.40 - (pulse - 1) * 0.24) * depth;
+
+        pt.pointMesh.scale.set(depth, depth, depth);
+        pt.coreMesh.scale.set(depth, depth, depth);
+        pt.pointMesh.material.opacity = depth;
+        pt.coreMesh.material.opacity = depth;
+      });
 
       renderer.render(scene, camera);
     };
 
     animate();
 
-    // 9. IntersectionObserver: Pause loop when scrolled out of view (0% idle CPU)
+    // 9. IntersectionObserver: Pause loop when scrolled out of view
     const intersectionObserver = new IntersectionObserver((entries) => {
       isVisible = entries[0].isIntersecting;
     }, { threshold: 0.05 });
@@ -472,14 +463,12 @@ export default function GlobeCanvas() {
   if (!hasWebGL) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
-        <svg viewBox="0 0 200 200" className="w-full h-full max-w-[400px] text-[#7ec8f2]/15">
-          <circle cx="100" cy="100" r="95" fill="#0c1017" stroke="currentColor" strokeWidth="1" />
-          <ellipse cx="100" cy="100" rx="95" ry="32" fill="none" stroke="currentColor" strokeWidth="1" />
-          <ellipse cx="100" cy="100" rx="95" ry="64" fill="none" stroke="currentColor" strokeWidth="1" />
-          <line x1="100" y1="5" x2="100" y2="195" stroke="currentColor" strokeWidth="1" />
-          <line x1="5" y1="100" x2="195" y2="100" stroke="currentColor" strokeWidth="1" />
-          <circle cx="85" cy="80" r="4" fill="#ff5a1f" />
-          <circle cx="85" cy="80" r="8" fill="none" stroke="#ff5a1f" strokeWidth="1" opacity="0.6" />
+        <svg viewBox="0 0 200 200" className="w-full h-full max-w-[400px] text-[#C8C4B8]/30">
+          <circle cx="100" cy="100" r="95" fill="#FAFAF8" stroke="#D8D4CA" strokeWidth="1" />
+          <circle cx="85" cy="80" r="4" fill="#DC2626" />
+          <circle cx="85" cy="80" r="8" fill="none" stroke="#DC2626" strokeWidth="1" opacity="0.6" />
+          <circle cx="120" cy="95" r="4" fill="#F5C518" />
+          <circle cx="120" cy="95" r="8" fill="none" stroke="#F5C518" strokeWidth="1" opacity="0.6" />
         </svg>
       </div>
     );

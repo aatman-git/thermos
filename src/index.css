@@ -239,7 +239,7 @@ a, button, input, select, textarea {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1.5px solid #ff5a1f;
+  border: 1.5px solid var(--color-accent);
   animation: tp 3s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 .pulse-ring::after {
