@@ -37,3 +37,35 @@ def alerts(db: Session = Depends(get_db), pag: dict = Depends(pagination),
                        "last_detected_at": e.last_detected_at} for e in rows],
             "page": pag["page"], "limit": pag["limit"], "total": total,
             "threshold": s.ALERT_RISK_THRESHOLD}
+
+
+from app.core.security import RoleAlert
+from app.services import audit_service
+from fastapi import HTTPException
+
+
+@router.post("/alerts/{event_id}/dispatch")
+def dispatch_alert(
+    event_id: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(RoleAlert),
+):
+    ev = db.get(m.ThermalEvent, event_id)
+    if not ev:
+        raise HTTPException(404, f"Event {event_id} not found")
+    prev_status = ev.status
+    ev.status = "ALERTED"
+    db.commit()
+    db.refresh(ev)
+
+    audit_service.log_incident_action(
+        db,
+        event_id=ev.id,
+        action="ALERT_DISPATCH",
+        from_status=prev_status,
+        to_status="ALERTED",
+        user_id=user["id"],
+        user_role=user["role"],
+        details={"dispatched_by": user["role"], "risk_score": ev.risk_score},
+    )
+    return {"id": ev.id, "status": ev.status, "message": "Simulated tactical alert dispatched to emergency response teams."}

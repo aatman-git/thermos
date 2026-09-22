@@ -12,9 +12,23 @@ dist
 dist-ssr
 *.local
 
+# Environment files and secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Python virtual environments & databases
+.venv/
+venv/
+*.db
+*.sqlite
+thermos.db
+test_thermos.db
+
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.json
+! .vscode/extensions.json
 .idea
 .DS_Store
 *.suo
@@ -22,7 +36,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-node_modules/
-node_modules/
-dist/
-dist/

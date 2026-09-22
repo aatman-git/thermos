@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -32,7 +32,7 @@ class ThermalEvent(Base):
     risk_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     risk_level: Mapped[str | None] = mapped_column(String(16), nullable=True)
     data_mode: Mapped[str] = mapped_column(String(8), default="demo")
-    status: Mapped[str] = mapped_column(String(24), default="active")
+    status: Mapped[str] = mapped_column(String(24), default="DETECTED")
     data_quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     # denormalised latest context for fast detail responses
     feature_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -46,6 +46,7 @@ class ThermalEvent(Base):
     observations: Mapped[list["ThermalObservation"]] = relationship(back_populates="event", cascade="all, delete-orphan")
     predictions: Mapped[list["Prediction"]] = relationship(back_populates="event", cascade="all, delete-orphan")
     risks: Mapped[list["RiskAssessment"]] = relationship(back_populates="event", cascade="all, delete-orphan")
+    logs: Mapped[list["IncidentLog"]] = relationship(back_populates="event", cascade="all, delete-orphan")
 
 
 class ThermalObservation(Base):
@@ -128,3 +129,31 @@ class InvestigationSession(Base):
     evidence: Mapped[list | None] = mapped_column(JSON, nullable=True)
     provider: Mapped[str] = mapped_column(String(24), default="rules")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    role: Mapped[str] = mapped_column(String(32), default="Public")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class IncidentLog(Base):
+    __tablename__ = "incident_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id: Mapped[str] = mapped_column(ForeignKey("thermal_events.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)  # "STATUS_CHANGE", "CLASSIFICATION", "ALERT_DISPATCH"
+    from_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    event: Mapped["ThermalEvent"] = relationship(back_populates="logs")
+

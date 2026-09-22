@@ -12,15 +12,20 @@ from app.services import event_service, investigator_service
 router = APIRouter(tags=["investigator"])
 
 
-@router.post("/investigator/ask", response_model=InvestigatorAskOut)
+from starlette.concurrency import run_in_threadpool
+from app.core.rate_limit import rate_limit
+
+@router.post("/investigator/ask", response_model=InvestigatorAskOut, dependencies=[Depends(rate_limit(max_requests=20, window_seconds=60))])
 async def ask(body: InvestigatorAskIn, db: Session = Depends(get_db)):
-    ctx = event_service.get_event_context(body.event_id, db) if body.event_id else None
+    ctx = await run_in_threadpool(lambda: event_service.get_event_context(body.event_id, db) if body.event_id else None)
     res = await investigator_service.ask_investigator(body.question, ctx)
     if body.event_id and ctx:
-        db.add(m.InvestigationSession(event_id=body.event_id, question=body.question,
-                                      answer=res["answer"], evidence=res["evidence"],
-                                      provider=res["provider"]))
-        db.commit()
+        def _save_session():
+            db.add(m.InvestigationSession(event_id=body.event_id, question=body.question,
+                                          answer=res["answer"], evidence=res["evidence"],
+                                          provider=res["provider"]))
+            db.commit()
+        await run_in_threadpool(_save_session)
     return InvestigatorAskOut(answer=res["answer"], evidence=res["evidence"],
                               provider=res["provider"], event_id=body.event_id)
 

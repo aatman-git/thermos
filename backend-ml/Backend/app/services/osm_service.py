@@ -49,7 +49,7 @@ def query_osm(lat: float, lon: float, radius_km: float | None = None) -> dict[st
     last_err = None
     for attempt in range(2):
         try:
-            with httpx.Client(timeout=settings.OSM_TIMEOUT_S) as c:
+            with httpx.Client(timeout=settings.OSM_TIMEOUT_S, headers={"User-Agent": "THERMOS-ThermalIntel/1.0"}) as c:
                 r = c.post(settings.OSM_OVERPASS_URL, data={"data": q})
                 r.raise_for_status()
                 data = _parse(lat, lon, r.json())

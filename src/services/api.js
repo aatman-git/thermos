@@ -30,7 +30,7 @@ export function normalizeAnomaly(feature) {
       id: feature.id || properties.anomaly_id,
       category: classification,
       risk_tier: riskTier,
-      risk_score: Math.round((properties.confidence || 0) * 100),
+      risk_score: properties.risk_score != null ? Math.round(properties.risk_score) : Math.round((properties.confidence || 0) * 100),
       region: properties.facility_name || `${lat.toFixed(3)}, ${lng.toFixed(3)}`,
       lat,
       lng,

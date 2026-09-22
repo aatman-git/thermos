@@ -56,6 +56,15 @@ def list_events(db: Session = Depends(get_db), pag: dict = Depends(pagination),
                         m.ThermalEvent.latitude >= la, m.ThermalEvent.latitude <= ha)
         except ValueError:
             raise HTTPException(400, "bbox must be minlon,minlat,maxlon,maxlat")
+    elif lat is not None and lon is not None and radius_km:
+        import math
+        d_lat = radius_km / 110.574
+        cos_lat = max(math.cos(math.radians(lat)), 0.01)
+        d_lon = radius_km / (111.320 * cos_lat)
+        q = q.where(m.ThermalEvent.latitude >= lat - d_lat,
+                    m.ThermalEvent.latitude <= lat + d_lat,
+                    m.ThermalEvent.longitude >= lon - d_lon,
+                    m.ThermalEvent.longitude <= lon + d_lon)
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
     rows = db.execute(q.order_by(m.ThermalEvent.last_detected_at.desc())
                       .offset(pag["offset"]).limit(pag["limit"])).scalars().all()
@@ -90,21 +99,72 @@ def event_detail(event_id: str, db: Session = Depends(get_db)):
             "created_at": ev.created_at, "updated_at": ev.updated_at}
 
 
+from app.core.security import RoleClassify, RoleStatusChange
+from app.services import audit_service
+from app.services.state_machine import validate_transition
+
+
 @router.post("/events/process")
-def process_event(obs: FirmsObservationIn, db: Session = Depends(get_db)):
+def process_event(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict = Depends(RoleClassify)):
     s = get_settings()
     data_mode = "live" if (s.ENABLE_LIVE_FIRMS and s.FIRMS_MAP_KEY) else "demo"
     try:
-        return event_service.process_event(obs.model_dump(), db, data_mode=data_mode)
+        res = event_service.process_event(obs.model_dump(), db, data_mode=data_mode)
+        eid = res["event"]["id"]
+        audit_service.log_incident_action(
+            db,
+            event_id=eid,
+            action="CLASSIFICATION",
+            to_status=res.get("classification", {}).get("label"),
+            user_id=user["id"],
+            user_role=user["role"],
+            details={"classification": res["classification"], "risk": res["risk"]},
+        )
+        return res
     except ValueError as e:
         raise HTTPException(400, str(e))
 
 
 @router.patch("/events/{event_id}/status")
-def update_status(event_id: str, body: StatusUpdate, db: Session = Depends(get_db)):
+@router.patch("/incidents/{event_id}/status")
+def update_status(
+    event_id: str,
+    body: StatusUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(RoleStatusChange),
+):
     ev = db.get(m.ThermalEvent, event_id)
     if not ev:
         raise HTTPException(404, f"Event {event_id} not found")
-    ev.status = body.status
+    curr = ev.status or "DETECTED"
+    try:
+        new_status = validate_transition(curr, body.status)
+    except ValueError as err:
+        raise HTTPException(status_code=409, detail=str(err))
+    ev.status = new_status
     db.commit()
-    return {"id": ev.id, "status": ev.status}
+    db.refresh(ev)
+
+    # Immutable audit logging
+    audit_service.log_incident_action(
+        db,
+        event_id=ev.id,
+        action="STATUS_CHANGE",
+        from_status=curr,
+        to_status=new_status,
+        user_id=user["id"],
+        user_role=user["role"],
+        details={"reason": getattr(body, "reason", None)},
+    )
+
+    return {"id": ev.id, "previous_status": curr, "status": ev.status}
+
+
+@router.get("/events/{event_id}/timeline")
+@router.get("/incidents/{event_id}/timeline")
+def incident_timeline(event_id: str, db: Session = Depends(get_db)):
+    ev = db.get(m.ThermalEvent, event_id)
+    if not ev:
+        raise HTTPException(404, f"Event {event_id} not found")
+    timeline = audit_service.get_incident_timeline(db, event_id)
+    return {"event_id": event_id, "timeline": timeline, "count": len(timeline)}

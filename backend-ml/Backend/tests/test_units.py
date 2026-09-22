@@ -78,3 +78,21 @@ def test_risk_engine_levels():
                           "industrial_proximity_km": 80, "refinery_proximity_km": 90,
                           "frp_trend_pct": -20, "firms_confidence_pct": 30})
     assert low["risk_level"] == "LOW"
+
+
+def test_firms_url_format():
+    from app.services.firms_service import FirmsService
+    fs = FirmsService()
+    fs.settings.FIRMS_MAP_KEY = "dummy_key"
+    url = fs._url("VIIRS_SNPP_NRT", "68,6,98,38", 2)
+    assert "/area/csv/dummy_key/VIIRS_SNPP_NRT/68,6,98,38/2" in url
+    assert "/world/" not in url
+
+
+def test_investigator_rule_answer():
+    from app.services.investigator_service import rule_answer
+    ans, ev = rule_answer("What next action should we take?", {"id": "TEST-1", "geospatial": {}, "temporal": {}, "classification": {}, "risk": {}})
+    assert isinstance(ans, str)
+    assert isinstance(ev, list)
+    assert not isinstance(ans, tuple)
+

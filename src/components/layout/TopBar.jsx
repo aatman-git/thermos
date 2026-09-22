@@ -71,6 +71,18 @@ export default function TopBar() {
         <span className="font-data">NASA FIRMS v2</span>
         <div className="w-px h-4 bg-[var(--color-border)]" />
         <span className="font-data">SIH 2026</span>
+        <div className="w-px h-4 bg-[var(--color-border)]" />
+        <span
+          className="inline-flex items-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] transition-colors cursor-help"
+          title="Thermal anomaly detection is not confirmed ground-truth fire. Risk score reflects operational prioritization, not fire-ignition probability. All alerts in this demo are simulated."
+          aria-label="Operational Disclaimer"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+        </span>
       </div>
     </header>
   );

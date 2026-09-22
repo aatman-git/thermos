@@ -7,16 +7,18 @@ from app.core.config import get_settings
 from app.db.database import get_db
 from app.schemas.events import FirmsObservationIn
 from app.schemas.predictions import PredictFeaturesIn, PredictOut
+from app.core.rate_limit import rate_limit
+from app.core.security import RoleClassify
 from app.services import event_service
 
 router = APIRouter(tags=["prediction"])
 
 
-@router.post("/predict", response_model=PredictOut)
-def predict(obs: FirmsObservationIn, db: Session = Depends(get_db)):
+@router.post("/predict", response_model=PredictOut, dependencies=[Depends(rate_limit(max_requests=60, window_seconds=60))])
+def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict = Depends(RoleClassify)):
     """Primary workflow: FIRMS-style observation -> full intelligence (enrichment automatic)."""
     s = get_settings()
-    data_mode = "live" if (s.ENABLE_LIVE_FIRMS and s.FIRMS_MAP_KEY) else "demo"
+    data_mode = "live" if (s.ENABLE_LIVE_FIRMS and s.active_firms_key) else "demo"
     try:
         full = event_service.process_event(obs.model_dump(), db, data_mode=data_mode)
     except ValueError as e:
@@ -25,7 +27,7 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db)):
                       confidence=full["classification"]["confidence"],
                       probabilities=full["classification"]["probabilities"],
                       model_version=full["meta"]["model_version"],
-                      feature_values=full["geospatial"] | {"frp": None},
+                      feature_values=(full.get("geospatial") or {}) | {"frp": None},
                       feature_quality={"warnings": full["data_quality"]["warnings"]},
                       low_margin=full["classification"]["low_margin"],
                       needs_review=full["classification"]["needs_review"],

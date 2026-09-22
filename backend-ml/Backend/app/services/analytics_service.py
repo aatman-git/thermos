@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,7 +39,8 @@ def summary(db: Session) -> dict:
 
 
 def timeseries(db: Session, days: int = 30) -> list[dict]:
-    rows = db.execute(select(m.ThermalEvent.first_detected_at)).all()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = db.execute(select(m.ThermalEvent.first_detected_at).where(m.ThermalEvent.first_detected_at >= cutoff)).all()
     c = Counter((r[0].date().isoformat() if isinstance(r[0], datetime) else str(r[0])[:10]) for r in rows if r[0])
     return [{"date": d, "count": n} for d, n in sorted(c.items())][-days:]
 
@@ -56,7 +57,8 @@ def risk_distribution(db: Session) -> list[dict]:
 
 def regions(db: Session, grid: float = 2.0) -> list[dict]:
     """Coarse lat/lon grid counts (server-side aggregation, no raw dump)."""
-    rows = db.execute(select(m.ThermalEvent.latitude, m.ThermalEvent.longitude, m.ThermalEvent.risk_level)).all()
+    rows = db.execute(select(m.ThermalEvent.latitude, m.ThermalEvent.longitude, m.ThermalEvent.risk_level)
+                      .order_by(m.ThermalEvent.last_detected_at.desc()).limit(5000)).all()
     cells: Counter = Counter()
     for lat, lon, risk in rows:
         cells[(round(lat / grid) * grid, round(lon / grid) * grid)] += 1

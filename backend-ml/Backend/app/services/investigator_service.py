@@ -94,14 +94,14 @@ def rule_answer(question: str, ctx_event: dict[str, Any]) -> tuple[str, list[dic
         chip("temporal", "persistence_hours_7d", t.get("persistence_hours_7d"))
         return ans, ev
     if any(k in q for k in ("what next", "inspect", "recommend", "action")):
-        return ("Recommended next steps: (1) cross-check the hotspot against recent optical imagery for smoke/flame "
-                "vs hot-roof artefacts; (2) confirm nearby industrial/refinery assets in OSM and their operating status; "
-                "(3) watch the next 2–3 satellite overpasses for FRP trend confirmation; "
-                "(4) if population exposure is high, notify the regional liaison for awareness (not alarm). "
-                "Insufficient evidence exists for any safety-critical claim.", [
-                    {"type": "temporal", "field": "frp_trend_pct", "value": t.get("frp_trend_pct")},
-                    {"type": "geospatial", "field": "industrial_proximity_km",
-                     "value": g.get("industrial_proximity_km")}]), ev
+        ans = ("Recommended next steps: (1) cross-check the hotspot against recent optical imagery for smoke/flame "
+               "vs hot-roof artefacts; (2) confirm nearby industrial/refinery assets in OSM and their operating status; "
+               "(3) watch the next 2–3 satellite overpasses for FRP trend confirmation; "
+               "(4) if population exposure is high, notify the regional liaison for awareness (not alarm). "
+               "Insufficient evidence exists for any safety-critical claim.")
+        ev.append({"type": "temporal", "field": "frp_trend_pct", "value": t.get("frp_trend_pct")})
+        ev.append({"type": "geospatial", "field": "industrial_proximity_km", "value": g.get("industrial_proximity_km")})
+        return ans, ev
     # default: grounded summary
     summary = ((ctx_event.get("explainability") or {}).get("human_readable_summary") or "").strip()
     ans = (f"Event {ctx_event.get('id')} is classified as {label} with confidence {c.get('confidence')} "

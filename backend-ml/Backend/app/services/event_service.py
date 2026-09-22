@@ -85,6 +85,8 @@ def process_event(raw_obs: dict[str, Any], db: Session, data_mode: str = "demo")
     s = get_settings()
     # 1-2. normalize
     obs = normalize_observation(raw_obs, default_source=raw_obs.get("source", "VIIRS"))
+    if obs is None:
+        raise ValueError("Invalid observation: coordinates out of bounds or malformed payload rejected by security filter")
     lat, lon, acq = obs["latitude"], obs["longitude"], obs["acquired_at"]
     # 3. candidate search (recent events, cheap prefilter)
     recent = db.execute(select(m.ThermalEvent).order_by(m.ThermalEvent.last_detected_at.desc()).limit(500)).scalars().all()
@@ -95,7 +97,7 @@ def process_event(raw_obs: dict[str, Any], db: Session, data_mode: str = "demo")
         prefix = {"Industrial": "IND", "Agricultur": "AGR", "Wild": "WLD", "Gas": "FLR", "Mining": "MIN"}.get("x", "EVT")
         ev = m.ThermalEvent(id=f"EVT-{uuid.uuid4().hex[:6].upper()}", latitude=lat, longitude=lon,
                             geom_wkt=f"POINT({lon} {lat})", first_detected_at=acq, last_detected_at=acq,
-                            observation_count=1, persistence_hours=0.0, data_mode=data_mode, status="active")
+                            observation_count=1, persistence_hours=0.0, data_mode=data_mode, status="DETECTED")
         db.add(ev)
         db.flush()
     else:
@@ -166,6 +168,8 @@ def process_event(raw_obs: dict[str, Any], db: Session, data_mode: str = "demo")
     ev.risk_score = risk["risk_score"]
     ev.risk_level = risk["risk_level"]
     ev.data_quality_score = dq["score"]
+    if ev.status in (None, "DETECTED", "CLASSIFIED", "active"):
+        ev.status = "ALERTED" if risk["risk_score"] >= s.ALERT_RISK_THRESHOLD else "ASSESSED"
     ev.feature_values = features
     ev.geospatial_context = {k: geo.get(k) for k in (
         "industrial_proximity_km", "refinery_proximity_km", "mine_proximity_km",
@@ -175,11 +179,6 @@ def process_event(raw_obs: dict[str, Any], db: Session, data_mode: str = "demo")
     ev.model_version = pred["model_version"]
     ev.enrichment_sources = geo.get("enrichment_sources", {})
     ev.updated_at = datetime.now(timezone.utc)
-    if is_new and ev.id.startswith("EVT-"):
-        tag = {"Industrial Fire": "IND", "Agricultural Burning": "AGR", "Wildfire": "WLD",
-               "Gas Flare": "FLR", "Mining Activity": "MIN"}.get(pred["predicted_class"], "EVT")
-        ev.id = f"{tag}-{uuid.uuid4().hex[:4].upper()}"
-        o.event_id = ev.id
     db.add(m.Prediction(event_id=ev.id, model_version=pred["model_version"],
                         predicted_class=pred["predicted_class"], confidence=pred["confidence"],
                         probabilities=pred["probabilities"], explanations=explanation,

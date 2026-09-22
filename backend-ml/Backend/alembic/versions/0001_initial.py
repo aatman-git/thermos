@@ -67,8 +67,51 @@ def upgrade() -> None:
     op.execute("ALTER TABLE thermal_observations ADD COLUMN IF NOT EXISTS geom geography(Point,4326)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_obs_geom ON thermal_observations USING GIST (geom)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_obs_event_acq ON thermal_observations (event_id, acquired_at)")
-    for tbl, cols in (("predictions", ["event_id"]), ("risk_assessments", ["event_id"]),
-                      ("reviews", ["event_id"]), ("investigation_sessions", ["event_id"])):
+    op.create_table(
+        "predictions",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("event_id", sa.String(32), sa.ForeignKey("thermal_events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("model_version", sa.String(64), nullable=False),
+        sa.Column("feature_schema_version", sa.String(16), server_default="v1"),
+        sa.Column("predicted_class", sa.String(64), nullable=False),
+        sa.Column("confidence", sa.Float(), nullable=False),
+        sa.Column("probabilities", sa.JSON(), nullable=False),
+        sa.Column("explanations", sa.JSON(), nullable=True),
+        sa.Column("low_margin", sa.Boolean(), server_default=sa.false()),
+        sa.Column("needs_review", sa.Boolean(), server_default=sa.false()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_table(
+        "risk_assessments",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("event_id", sa.String(32), sa.ForeignKey("thermal_events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("risk_engine_version", sa.String(16), server_default="risk-v1"),
+        sa.Column("risk_score", sa.Float(), nullable=False),
+        sa.Column("risk_level", sa.String(16), nullable=False),
+        sa.Column("factors", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_table(
+        "reviews",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("event_id", sa.String(32), sa.ForeignKey("thermal_events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("predicted_class", sa.String(64), nullable=True),
+        sa.Column("reviewed_class", sa.String(64), nullable=True),
+        sa.Column("review_status", sa.String(24), server_default="pending"),
+        sa.Column("reviewer_note", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_table(
+        "investigation_sessions",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("event_id", sa.String(32), sa.ForeignKey("thermal_events.id", ondelete="CASCADE"), nullable=True),
+        sa.Column("question", sa.Text(), nullable=False),
+        sa.Column("answer", sa.Text(), nullable=False),
+        sa.Column("evidence", sa.JSON(), nullable=True),
+        sa.Column("provider", sa.String(24), server_default="rules"),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    for tbl in ("predictions", "risk_assessments", "reviews", "investigation_sessions"):
         op.execute(f"CREATE INDEX IF NOT EXISTS ix_{tbl}_event ON {tbl} (event_id)")
 
 

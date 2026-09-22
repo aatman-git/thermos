@@ -5,8 +5,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.services.state_machine import IncidentStatus
+
 DataMode = Literal["demo", "live"]
-EventStatus = Literal["active", "acknowledged", "investigating", "reviewed", "dismissed", "resolved"]
+EventStatus = str
 
 
 class FirmsObservationIn(BaseModel):

@@ -1,4 +1,4 @@
-"""THERMOS FastAPI entrypoint: graceful startup/shutdown, scheduler optional."""
+"""THERMOS FastAPI entrypoint: graceful startup/shutdown, scheduler optional, security hardened."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -8,7 +8,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import alerts, analytics, demo, events, health, investigator, legacy, prediction, review, system
+from app.api.routes import (
+    alerts,
+    analytics,
+    demo,
+    events,
+    health,
+    internal,
+    investigator,
+    legacy,
+    prediction,
+    review,
+    system,
+)
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.db.database import Base, engine
@@ -34,7 +46,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # noqa: BLE001
         log.error("ML model failed to load: %s (API still starts, /predict will 503)", e)
     # 6. optional scheduler
-    if s.ENABLE_SCHEDULER and s.FIRMS_MAP_KEY:
+    if s.ENABLE_SCHEDULER and s.active_firms_key:
         try:
             from app.workers.firms_ingestion import poll_once
             scheduler = BackgroundScheduler()
@@ -45,7 +57,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:  # noqa: BLE001
             log.warning("Scheduler failed to start: %s", e)
     else:
-        log.info("Scheduler disabled (ENABLE_SCHEDULER=%s)", s.ENABLE_SCHEDULER)
+        log.info("Scheduler disabled (ENABLE_SCHEDULER=%s, active_firms_key_configured=%s)",
+                 s.ENABLE_SCHEDULER, bool(s.active_firms_key))
     yield
     # 84. graceful shutdown
     if scheduler:
@@ -57,18 +70,57 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(title=s.APP_NAME, version=s.APP_VERSION, lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins_list,
-                       allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+    # 1. CORS with explicit allowlist (rejects wildcard in production)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=s.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+
+    # 2. Production Security Headers Middleware
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):  # noqa: ANN001, ANN202
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        if s.is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+        return response
+
+    # 3. Global Exception Handler: masks internal details from client responses
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception):  # noqa: ANN001, ANN202
         log.exception("Unhandled error on %s", request.url.path)
-        return JSONResponse(status_code=500, content={"error": {"code": "INTERNAL_ERROR",
-                         "message": "An internal error occurred.", "details": {}}})
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "An internal server error occurred.",
+                    "details": {},
+                }
+            },
+        )
 
-    for r in (health.router, events.router, prediction.router, analytics.router,
-              alerts.router, investigator.router, review.router, system.router,
-              demo.router, legacy.router):
+    for r in (
+        health.router,
+        events.router,
+        prediction.router,
+        analytics.router,
+        alerts.router,
+        investigator.router,
+        review.router,
+        system.router,
+        demo.router,
+        legacy.router,
+        internal.router,
+    ):
         app.include_router(r, prefix="/api")
     return app
 

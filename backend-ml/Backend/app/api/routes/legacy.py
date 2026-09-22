@@ -24,6 +24,7 @@ def anomalies(db: Session = Depends(get_db), limit: int = 500):
                       "properties": {"anomaly_id": e.id, "classification": e.current_classification,
                                      "confidence": e.classification_confidence or 0,
                                      "risk_level": (e.risk_level or "MODERATE").upper(),
+                                     "risk_score": e.risk_score,
                                      "acq_date": e.last_detected_at.date().isoformat() if e.last_detected_at else None,
                                      "acq_time": e.last_detected_at.strftime("%H%M") if e.last_detected_at else "0000",
                                      "persistence_hours_7d": e.persistence_hours,

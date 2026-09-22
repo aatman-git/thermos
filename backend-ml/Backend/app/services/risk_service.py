@@ -41,15 +41,18 @@ def calculate_risk(features: dict[str, Any], temporal: dict[str, Any] | None = N
     # confidence slightly modulates thermal component, kept transparent
     thermal_adj = _clip01(thermal * (0.85 + 0.3 * conf))
 
-    w = s.risk_weights
+    # Canonical 5-factor weighted formula (0-100):
+    # 0.30 x Severity + 0.25 x Persistence + 0.20 x Exposure + 0.15 x Infrastructure + 0.10 x Growth Proxy
     parts = {
-        "thermal_severity": round(thermal_adj * w["thermal_severity"] * 100, 1),
-        "persistence": round(persistence * w["persistence"] * 100, 1),
-        "population_exposure": round(population * w["population_exposure"] * 100, 1),
-        "infrastructure_proximity": round(infra * w["infrastructure_proximity"] * 100, 1),
-        "intensity_trend": round(trend * w["intensity_trend"] * 100, 1),
+        "severity": round(thermal_adj * 30.0, 1),
+        "persistence": round(persistence * 25.0, 1),
+        "exposure": round(population * 20.0, 1),
+        "infrastructure": round(infra * 15.0, 1),
+        "trend": round(trend * 10.0, 1),
     }
     score = round(sum(parts.values()), 1)
+    score = max(0.0, min(100.0, score))
+
     if score >= s.RISK_CRITICAL:
         level = "CRITICAL"
     elif score >= s.RISK_HIGH:
@@ -58,7 +61,18 @@ def calculate_risk(features: dict[str, Any], temporal: dict[str, Any] | None = N
         level = "MODERATE"
     else:
         level = "LOW"
-    return {"risk_score": score, "risk_level": level, "factors": parts,
-            "risk_engine_version": s.RISK_ENGINE_VERSION, "disclaimer": DISCLAIMER,
-            "components_01": {"thermal": thermal_adj, "persistence": persistence,
-                              "population": population, "infra": infra, "trend": trend}}
+
+    return {
+        "risk_score": score,
+        "risk_level": level,
+        "factors": parts,
+        "risk_engine_version": s.RISK_ENGINE_VERSION,
+        "disclaimer": DISCLAIMER,
+        "components_01": {
+            "severity": thermal_adj,
+            "persistence": persistence,
+            "exposure": population,
+            "infrastructure": infra,
+            "growth_proxy": trend,
+        },
+    }

@@ -8,21 +8,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env", "../../.env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     APP_NAME: str = "THERMOS — Thermal Event Recognition and Monitoring Operational System"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
+    SECRET_KEY: str = "thermos-default-dev-secret-key-change-in-production"
 
     # Database: PostgreSQL+PostGIS in prod/docker, SQLite fallback for local demo/tests
     DATABASE_URL: str = "sqlite:///./thermos.db"
 
-    # FIRMS
+    # Redis Cache & Broker
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # NASA FIRMS (Supports both FIRMS_MAP_KEY and FIRMS_API_KEY)
     FIRMS_MAP_KEY: str = ""
+    FIRMS_API_KEY: str = ""
     FIRMS_API_BASE_URL: str = "https://firms.modaps.eosdis.nasa.gov/api"
     ENABLE_LIVE_FIRMS: bool = False
-    FIRMS_POLL_INTERVAL_MIN: int = 60
+    FIRMS_POLL_INTERVAL_MIN: int = 15
     FIRMS_TIMEOUT_S: float = 20.0
 
     # ML
@@ -78,8 +87,16 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     @property
+    def active_firms_key(self) -> str:
+        return (self.FIRMS_MAP_KEY or self.FIRMS_API_KEY).strip()
+
+    @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if self.is_production:
+            # Strictly reject wildcard origins in production
+            origins = [o for o in origins if o != "*"]
+        return origins or ["http://localhost:5173", "http://localhost:3000"]
 
     @property
     def risk_weights(self) -> dict:
