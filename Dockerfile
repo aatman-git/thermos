@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY ml/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all ml modules (api, core, models, services, data)
+# Copy all ml modules (api, core, models, services, data) and ai package
 COPY ml /app/ml
+COPY ai /app/ai
 
 # Do not run the API as root inside the container.
 RUN useradd --create-home --uid 10001 appuser \

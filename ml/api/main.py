@@ -1,10 +1,17 @@
 import logging
 import secrets
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+
+# Ensure root repository directory is in path so 'ai' package imports cleanly
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from core.config import settings
 from core.database import db_manager, fallback_store
@@ -19,6 +26,7 @@ from api.routes.facilities import router as facilities_router
 from api.routes.rag import router as rag_router
 from api.routes.stats import router as stats_router
 from api.routes.predict import router as predict_router
+from ai.api_router import router as ai_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -182,6 +190,7 @@ app.add_middleware(
 )
 
 # Mount all API Routers under /api
+app.include_router(ai_router, prefix=settings.API_V1_STR)
 app.include_router(anomalies_router, prefix=settings.API_V1_STR)
 app.include_router(facilities_router, prefix=settings.API_V1_STR)
 app.include_router(rag_router, prefix=settings.API_V1_STR)
