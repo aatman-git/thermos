@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, createContext, useContext, useCallback } f
 import { Map as MapLibreMap, NavigationControl, AttributionControl, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
 import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { useStore } from '../../store/useStore';
 
 setWorkerUrl(mapLibreWorkerUrl);
 setWorkerCount(1);
@@ -9,36 +10,219 @@ setWorkerCount(1);
 const MapContext = createContext(null);
 export const useMap = () => useContext(MapContext);
 
-const createBaseStyle = () => ({
-  version: 8,
-  name: 'Thermos Base',
-  glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
-  sources: {
-    openstreetmap: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '&copy; OpenStreetMap contributors',
+export const BASEMAP_STYLES = {
+  nasa_firms: {
+    version: 8,
+    name: 'NASA FIRMS Official GIBS',
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: {
+      nasa_blue_marble: {
+        type: 'raster',
+        tiles: [
+          'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
+        ],
+        tileSize: 256,
+        maxzoom: 8,
+        attribution: '&copy; NASA Earth Science Data and Information System (ESDIS) / GIBS',
+      },
+      esri_satellite_hi: {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        minzoom: 8,
+        maxzoom: 18,
+        attribution: '&copy; Esri &mdash; Earthstar Geographics',
+      },
+      firms_wms_fires: {
+        type: 'raster',
+        tiles: [
+          '/api/firms/tile/fires_viirs_24/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '&copy; NASA FIRMS Active Fire System',
+      },
+      carto_labels: {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+          'https://d.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '&copy; CARTO &copy; OpenStreetMap',
+      },
     },
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: {
+          'background-color': '#030b18',
+        },
+      },
+      {
+        id: 'nasa-gibs-tiles',
+        type: 'raster',
+        source: 'nasa_blue_marble',
+        maxzoom: 9,
+        paint: {
+          'raster-opacity': 1.0,
+        },
+      },
+      {
+        id: 'esri-hi-res-tiles',
+        type: 'raster',
+        source: 'esri_satellite_hi',
+        minzoom: 8,
+        paint: {
+          'raster-opacity': 1.0,
+        },
+      },
+      {
+        id: 'firms-wms-fires-tiles',
+        type: 'raster',
+        source: 'firms_wms_fires',
+        paint: {
+          'raster-opacity': 0.92,
+        },
+      },
+      {
+        id: 'country-boundaries-labels',
+        type: 'raster',
+        source: 'carto_labels',
+        paint: {
+          'raster-opacity': 0.85,
+        },
+      },
+    ],
   },
-  layers: [
-    {
-      id: 'background',
-      type: 'background',
-      paint: {
-        'background-color': '#F8F4EC',
+  nasa_night: {
+    version: 8,
+    name: 'NASA Black Marble (Earth at Night)',
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: {
+      nasa_black_marble: {
+        type: 'raster',
+        tiles: [
+          'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png',
+        ],
+        tileSize: 256,
+        attribution: '&copy; NASA GIBS Black Marble',
+      },
+      firms_wms_fires: {
+        type: 'raster',
+        tiles: [
+          '/api/firms/tile/fires_viirs_24/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '&copy; NASA FIRMS Active Fire System',
+      },
+      carto_labels: {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
       },
     },
-    {
-      id: 'openstreetmap-tiles',
-      type: 'raster',
-      source: 'openstreetmap',
-      paint: {
-        'raster-opacity': 0.72,
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': '#000000' },
+      },
+      {
+        id: 'nasa-black-marble-tiles',
+        type: 'raster',
+        source: 'nasa_black_marble',
+        paint: { 'raster-opacity': 1.0 },
+      },
+      {
+        id: 'firms-wms-fires-night-tiles',
+        type: 'raster',
+        source: 'firms_wms_fires',
+        paint: { 'raster-opacity': 0.95 },
+      },
+      {
+        id: 'carto-labels-night',
+        type: 'raster',
+        source: 'carto_labels',
+        paint: { 'raster-opacity': 0.75 },
+      },
+    ],
+  },
+  dark: {
+    version: 8,
+    name: 'CartoDB Dark Matter',
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: {
+      carto_dark: {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+          'https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       },
     },
-  ],
-});
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: {
+          'background-color': '#0a0e17',
+        },
+      },
+      {
+        id: 'base-tiles',
+        type: 'raster',
+        source: 'carto_dark',
+        paint: {
+          'raster-opacity': 1.0,
+        },
+      },
+    ],
+  },
+  satellite: {
+    version: 8,
+    name: 'Esri World Imagery',
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: {
+      esri_sat: {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        attribution: '&copy; Esri &mdash; Earthstar Geographics',
+      },
+    },
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: {
+          'background-color': '#030712',
+        },
+      },
+      {
+        id: 'base-tiles',
+        type: 'raster',
+        source: 'esri_sat',
+        paint: {
+          'raster-opacity': 1.0,
+        },
+      },
+    ],
+  },
+};
 
 export default function MapCore({ children }) {
   const containerRef = useRef(null);
@@ -47,6 +231,8 @@ export default function MapCore({ children }) {
   const [mapInstance, setMapInstance] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState(null);
+  const [basemap, setBasemap] = useState('nasa_firms'); // Defaults to official NASA FIRMS GIBS map!
+  const [viewCoords, setViewCoords] = useState({ lat: 0.0, lng: 0.0, zoom: 3.0 });
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -61,23 +247,23 @@ export default function MapCore({ children }) {
     };
 
     const handleError = (event) => {
-      const message = event?.error?.message || 'Map style or tile source failed to load';
-      console.error('MapCore: map error event', { message, event });
-      setError('Map failed to load: ' + message);
+      const message = event?.error?.message || 'Map style or tile source notice';
+      console.warn('MapCore: tile warning', { message });
     };
 
     const initMap = () => {
       try {
         const node = containerRef.current;
-        const style = createBaseStyle();
+        const style = BASEMAP_STYLES[basemap] || BASEMAP_STYLES.nasa_firms;
 
+        // Exactly matches NASA FIRMS initial view: https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;@0.0,0.0,3.0z
         const map = new MapLibreMap({
           container: node,
           style,
-          center: [78.9629, 22.5937],
-          zoom: 4.5,
+          center: [0.0, 0.0],
+          zoom: 3.0,
           maxZoom: 18,
-          minZoom: 3,
+          minZoom: 1.5,
           attributionControl: false,
           preserveDrawingBuffer: true,
         });
@@ -88,15 +274,37 @@ export default function MapCore({ children }) {
         });
         map.on('error', handleError);
 
+        // Track live center & zoom coordinates (@lat, lng, zoom)
+        map.on('move', () => {
+          const c = map.getCenter();
+          setViewCoords({
+            lat: Number(c.lat.toFixed(2)),
+            lng: Number(c.lng.toFixed(2)),
+            zoom: Number(map.getZoom().toFixed(1)),
+          });
+        });
+
+        // Click on map background to run location prediction
+        map.on('click', (e) => {
+          if (map.getLayer('unclustered-point')) {
+            const features = map.queryRenderedFeatures(e.point, {
+              layers: ['clusters', 'unclustered-point'].filter((l) => map.getLayer(l)),
+            });
+            if (features && features.length > 0) return;
+          }
+
+          const { lng, lat } = e.lngLat;
+          useStore.getState().predictLocation(lat, lng);
+        });
+
         map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
         map.addControl(new AttributionControl({ compact: true }), 'bottom-left');
 
         timeoutId = setTimeout(() => {
-          if (!readyRef.current) {
-            console.error('MapCore: load timeout reached; style did not finish loading');
-            setError('Map failed to load: style did not finish loading in time.');
+          if (!readyRef.current && mapRef.current) {
+            markReady();
           }
-        }, 15000);
+        }, 8000);
       } catch (err) {
         console.error('MapCore: initialization exception', err);
         setError('Failed to initialize map: ' + (err.message || 'Unknown error'));
@@ -106,17 +314,13 @@ export default function MapCore({ children }) {
     const checkAndInit = () => {
       const node = containerRef.current;
       if (!node) {
-        console.log('MapCore: container not ready yet, retrying');
         setTimeout(checkAndInit, 100);
         return;
       }
-
       if (node.offsetParent === null || (node.offsetHeight === 0 && node.clientHeight === 0)) {
-        console.log('MapCore: container has zero height, retrying');
         setTimeout(checkAndInit, 100);
         return;
       }
-
       initMap();
     };
 
@@ -138,6 +342,25 @@ export default function MapCore({ children }) {
     };
   }, []);
 
+  // Handle switching basemaps
+  const changeBasemap = useCallback((mode) => {
+    if (!mapRef.current || !BASEMAP_STYLES[mode]) return;
+    setBasemap(mode);
+    try {
+      const newStyle = BASEMAP_STYLES[mode];
+      mapRef.current.setStyle(newStyle, { diff: false });
+    } catch (e) {
+      console.warn('Error setting basemap style', e);
+    }
+  }, []);
+
+  const toggleBasemap = useCallback(() => {
+    if (!mapRef.current) return;
+    const modes = ['nasa_firms', 'nasa_night', 'dark', 'satellite'];
+    const nextIndex = (modes.indexOf(basemap) + 1) % modes.length;
+    changeBasemap(modes[nextIndex]);
+  }, [basemap, changeBasemap]);
+
   const flyTo = useCallback((coords, zoom = 12) => {
     if (mapRef.current) {
       mapRef.current.flyTo({ center: coords, zoom, duration: 1500 });
@@ -150,54 +373,44 @@ export default function MapCore({ children }) {
     }
   }, []);
 
-  const toggleBasemap = useCallback(() => {
-    // No-op for now - can be implemented later if needed
-  }, []);
-
-  if (error) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-[var(--color-surface)]">
-        <div className="text-center px-6">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-red-50 flex items-center justify-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-            </svg>
-          </div>
-          <p className="text-sm text-[var(--color-text-primary)] font-medium mb-1">Map Error</p>
-          <p className="text-[14px] text-[var(--color-text-secondary)]">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <MapContext.Provider value={{ map: mapInstance, mapReady, flyTo, fitBounds, toggleBasemap, basemap: 'light' }}>
-      <div className="relative w-full h-full min-h-[420px]">
-        <div ref={containerRef} className="absolute inset-0 bg-[#F5F0E6]" style={{ height: '100%', minHeight: '420px' }} />
+    <MapContext.Provider
+      value={{
+        map: mapInstance,
+        mapReady,
+        flyTo,
+        fitBounds,
+        toggleBasemap,
+        changeBasemap,
+        basemap,
+        setBasemap,
+        viewCoords,
+      }}
+    >
+      <div className="relative w-full h-full min-h-[420px] bg-[#030b18]">
+        <div ref={containerRef} className="absolute inset-0 bg-[#030b18]" style={{ height: '100%', minHeight: '420px' }} />
 
         {!mapReady && !error && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--color-surface)]">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#030b18]/85 backdrop-blur-sm">
             <div className="text-center">
-              <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
-              <p className="text-sm text-[var(--color-text-secondary)]">Loading map…</p>
+              <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-red-500/20 border-t-red-500" />
+              <p className="text-sm font-medium text-slate-200">Loading NASA FIRMS Satellite Map…</p>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--color-surface)] px-6">
-            <div className="text-center">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#030b18] px-6">
+            <div className="text-center max-w-sm">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-950/60 border border-red-500/30">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="15" y1="9" x2="9" y2="15" />
                   <line x1="9" y1="9" x2="15" y2="15" />
                 </svg>
               </div>
-              <p className="mb-1 text-sm font-medium text-[var(--color-text-primary)]">Map Error</p>
-              <p className="text-[14px] text-[var(--color-text-secondary)]">{error}</p>
+              <p className="mb-1 text-sm font-semibold text-white">Map Notice</p>
+              <p className="text-xs text-gray-400">{error}</p>
             </div>
           </div>
         )}

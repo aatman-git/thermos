@@ -13,6 +13,7 @@ from app.api.routes import (
     analytics,
     demo,
     events,
+    fires,
     health,
     internal,
     investigator,
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
 
     for r in (
         health.router,
+        fires.router,
         events.router,
         prediction.router,
         analytics.router,

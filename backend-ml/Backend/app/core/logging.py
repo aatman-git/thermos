@@ -24,7 +24,7 @@ class SecretRedactingFilter(logging.Filter):
 
         msg = record.getMessage()
         # Redact configured active secrets
-        for secret in (s.FIRMS_MAP_KEY, s.FIRMS_API_KEY, s.SECRET_KEY, s.OPENAI_API_KEY, s.GEMINI_API_KEY):
+        for secret in (s.FIRMS_MAP_KEY, s.FIRMS_API_KEY, s.SECRET_KEY, s.GEMINI_API_KEY, getattr(s, "COPERNICUS_CLIENT_SECRET", "")):
             if secret and len(secret) >= 6 and secret in msg:
                 msg = msg.replace(secret, "***REDACTED***")
 

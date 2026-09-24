@@ -100,14 +100,85 @@ export default function IncidentDetailDrawer() {
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* AI Explanation (Google Gemini 3.6 / 2.0 Flash) */}
+              <div className="p-4 bg-slate-900 text-slate-100 rounded-[var(--radius-lg)] border border-slate-700/80 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                    <h3 className="text-scale-xs font-bold uppercase tracking-wider text-blue-400">
+                      AI Explanation
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                    Gemini Flash
+                  </span>
+                </div>
+                <p className="text-scale-sm leading-relaxed text-slate-200">
+                  {p.explanation || "AI explanation unavailable."}
+                </p>
+              </div>
+
+              {/* Multi-Source Environmental & Infrastructure Context */}
+              <div className="space-y-2.5">
+                <h3 className="text-scale-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                  Multi-Source Satellite & GIS Context
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* OSM Industrial Context */}
+                  <div className="p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] flex items-start gap-2.5">
+                    <div className="p-1.5 rounded bg-amber-500/10 text-amber-600 font-bold shrink-0">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 20h20M6 20V10l4 3V10l4 3V4l6 4v12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-scale-xs text-[var(--color-text-tertiary)] font-semibold uppercase tracking-wider">
+                        Industrial Context
+                      </div>
+                      <div className="text-scale-sm font-bold text-[var(--color-text-primary)] mt-0.5">
+                        {p.is_industrial ? 'Industrial zone nearby' : 'No industrial infrastructure detected'}
+                      </div>
+                      {p.is_industrial && p.nearest_industrial_distance_m != null && (
+                        <div className="text-scale-xs text-[var(--color-text-secondary)] mt-0.5 font-data">
+                          Nearest industrial: <strong>{Math.round(p.nearest_industrial_distance_m)} m</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Copernicus Sentinel Context */}
+                  <div className="p-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] flex items-start gap-2.5">
+                    <div className="p-1.5 rounded bg-emerald-500/10 text-emerald-600 font-bold shrink-0">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 2a14.5 14.5 0 0 0 0 20M2 12h20" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="text-scale-xs text-[var(--color-text-tertiary)] font-semibold uppercase tracking-wider">
+                        Copernicus Sentinel
+                      </div>
+                      <div className="text-scale-sm font-bold text-[var(--color-text-primary)] mt-0.5">
+                        {p.land_cover_type
+                          ? `Land cover: ${p.land_cover_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}`
+                          : (p.land_cover ? `Land cover: ${p.land_cover}` : 'Land cover data unavailable')}
+                      </div>
+                      <div className="text-scale-xs text-[var(--color-text-secondary)] mt-0.5 font-data">
+                        {p.ndvi_value != null ? `NDVI: ${Number(p.ndvi_value).toFixed(2)}` : 'Copernicus land context'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Meta grid */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-[var(--color-surface)] border border-[var(--color-border-subtle)] rounded-[var(--radius-lg)]">
                 <MetaItem label="Location" value={p.region} />
                 <MetaItem label="Coordinates" value={formatCoords(p.lat, p.lng)} mono />
                 <MetaItem label="First Detected" value={formatTimestamp(p.first_detected)} />
                 <MetaItem label="Persistence" value={formatDuration(p.persistence_hours)} mono />
-                <MetaItem label="Observations" value={p.observation_count} mono />
-                <MetaItem label="Land Cover" value={p.land_cover} />
+                <MetaItem label="Observations" value={p.observation_count || 1} mono />
+                <MetaItem label="Land Cover" value={p.land_cover_type ? p.land_cover_type.replace(/_/g, ' ') : p.land_cover} />
                 <MetaItem label="Radiative Power" value={`${p.frp} MW`} mono />
                 <MetaItem label="Brightness Temp" value={`${p.brightness_temp} K`} mono />
               </div>

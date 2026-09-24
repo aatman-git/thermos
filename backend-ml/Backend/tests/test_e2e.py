@@ -51,3 +51,40 @@ def test_full_pipeline_and_endpoints(client):
     assert client.post("/api/demo/scenario/industrial_fire").status_code == 200
     # legacy compat
     assert "FeatureCollection" in client.get("/api/anomalies").json()["type"]
+
+    # NASA FIRMS fires endpoint
+    fires_res = client.get("/api/fires")
+    assert fires_res.status_code == 200
+    fires_data = fires_res.json()
+    assert fires_data["status"] == "success"
+    assert "fires" in fires_data and "features" in fires_data
+    assert fires_data["count"] >= 1
+    sample_fire = fires_data["fires"][0]
+    assert "latitude" in sample_fire and isinstance(sample_fire["latitude"], float)
+    assert "longitude" in sample_fire and isinstance(sample_fire["longitude"], float)
+    assert "brightness" in sample_fire
+    assert "confidence" in sample_fire
+    assert "frp" in sample_fire
+
+    # Location-based ML prediction (point with no active fire)
+    pred_no_fire = client.post("/api/predict", json={"latitude": 28.6139, "longitude": 77.2090})
+    assert pred_no_fire.status_code == 200
+    pnf_data = pred_no_fire.json()
+    assert pnf_data["has_hotspot"] is False
+    assert pnf_data["risk_level"] == "LOW"
+    assert "probabilities" in pnf_data and "feature_values" in pnf_data
+    assert pnf_data["location"]["latitude"] == 28.6139
+
+    # Location-based ML prediction (with thermal hotspot input)
+    pred_fire = client.post("/api/predict", json={
+        "latitude": 22.4707, "longitude": 70.0577, "brightness_k": 348.5, "frp_mw": 35.0, "confidence": 90
+    })
+    assert pred_fire.status_code == 200
+    pf_data = pred_fire.json()
+    assert pf_data["has_hotspot"] is True
+    assert pf_data["predicted_class"] in (
+        "Industrial Fire", "Industrial Thermal Source", "Gas Flare",
+        "Agricultural Burning", "Wildfire", "Mining Activity"
+    )
+    assert pf_data["risk_score"] > 0
+

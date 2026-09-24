@@ -83,8 +83,44 @@ def event_detail(event_id: str, db: Session = Depends(get_db)):
     ctx = event_service.get_event_context(event_id, db)
     assert ctx
     g, t = ctx["geospatial"], ctx["temporal"]
+
+    from app.services.osm_service import get_industrial_context
+    from app.services.copernicus_service import get_copernicus_context
+    from app.services.ai_explainer_service import generate_fire_explanation
+
+    ind_ctx = get_industrial_context(ev.latitude, ev.longitude)
+    cop_ctx = get_copernicus_context(ev.latitude, ev.longitude)
+    rel_tags = ind_ctx.get("relevant_tags") or ind_ctx.get("matched_tags", {})
+    osm_ctx = {
+        "is_industrial": ind_ctx.get("is_industrial", False),
+        "nearest_industrial_distance_m": ind_ctx.get("nearest_industrial_distance_m"),
+        "relevant_tags": rel_tags,
+        "matched_tags": rel_tags,
+    }
+    copernicus_ctx = {
+        "land_cover_type": cop_ctx.get("land_cover_type"),
+        "ndvi_value": cop_ctx.get("ndvi_value"),
+    }
+    expl_text = generate_fire_explanation({
+        "category": ev.current_classification,
+        "confidence": ev.classification_confidence,
+        "risk_score": ev.risk_score,
+        "firms": {
+            "brightness": (ev.feature_values or {}).get("brightness_k", 330.0),
+            "frp": (ev.feature_values or {}).get("frp_mw", 15.0),
+        },
+        "osm": osm_ctx,
+        "copernicus": copernicus_ctx,
+    })
+
     return {"id": ev.id, "latitude": ev.latitude, "longitude": ev.longitude,
-            "classification": ev.current_classification, "confidence": ev.classification_confidence,
+            "classification": {
+                "category": ev.current_classification,
+                "confidence": ev.classification_confidence,
+                "risk_score": ev.risk_score,
+            },
+            "category": ev.current_classification,
+            "confidence": ev.classification_confidence,
             "probabilities": ctx["classification"]["probabilities"],
             "risk_score": ev.risk_score, "risk_level": ev.risk_level,
             "risk_factors": ctx["risk"]["factors"], "risk_disclaimer": "Operational priority score, not disaster probability.",
@@ -93,6 +129,20 @@ def event_detail(event_id: str, db: Session = Depends(get_db)):
                            "source": g.get("population_source")},
             "land_cover": g.get("land_cover"), "explainability": ctx["explainability"],
             "data_quality": {"score": ev.data_quality_score},
+            "firms": {
+                "brightness": (ev.feature_values or {}).get("brightness_k", 330.0),
+                "frp": (ev.feature_values or {}).get("frp_mw", 15.0),
+            },
+            "is_industrial": ind_ctx.get("is_industrial", False),
+            "nearest_industrial_distance_m": ind_ctx.get("nearest_industrial_distance_m"),
+            "relevant_tags": rel_tags,
+            "matched_tags": rel_tags,
+            "industrial_context": ind_ctx,
+            "osm_context": osm_ctx,
+            "copernicus_context": copernicus_ctx,
+            "land_cover_type": cop_ctx.get("land_cover_type"),
+            "ndvi_value": cop_ctx.get("ndvi_value"),
+            "explanation": expl_text,
             "data_mode": ev.data_mode, "status": ev.status, "model_version": ev.model_version,
             "enrichment_sources": ev.enrichment_sources,
             "first_detected_at": ev.first_detected_at, "last_detected_at": ev.last_detected_at,

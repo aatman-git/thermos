@@ -5,6 +5,7 @@ import IndustrialBoundaryLayer from './IndustrialBoundaryLayer';
 import HeatmapLayer from './HeatmapLayer';
 import MapControls from './MapControls';
 import TimeSlider from './TimeSlider';
+import PredictionPanel from './PredictionPanel';
 
 export default function MapView() {
   const mapMode = useStore((s) => s.mapMode);
@@ -17,6 +18,7 @@ export default function MapView() {
         {showIndustrialOverlay && <IndustrialBoundaryLayer />}
       </MapCore>
       <MapControls />
+      <PredictionPanel />
       <TimeSlider />
     </div>
   );

@@ -24,14 +24,32 @@ class PredictFeaturesIn(BaseModel):
 
 class PredictOut(BaseModel):
     predicted_class: str
+    display_class: str | None = None
     confidence: float
     probabilities: dict[str, float]
     model_version: str
     feature_values: dict[str, Any]
-    feature_quality: dict[str, Any]
+    feature_quality: dict[str, Any] = {}
     low_margin: bool = False
     needs_review: bool = False
     explanations: dict[str, Any] | None = None
+    risk_score: float | None = None
+    risk_level: str | None = None
+    has_hotspot: bool = True
+    location: dict[str, float] | None = None
+    message: str | None = None
+    is_industrial: bool = False
+    nearest_industrial_distance_m: float | None = None
+    relevant_tags: dict[str, Any] = {}
+    matched_tags: dict[str, Any] = {}
+    industrial_context: dict[str, Any] | None = None
+    osm_context: dict[str, Any] | None = None
+    copernicus_context: dict[str, Any] | None = None
+    land_cover_type: str | None = None
+    ndvi_value: float | None = None
+    explanation: str | None = None
+    classification: dict[str, Any] | None = None
+    firms: dict[str, Any] | None = None
 
 
 class ProcessOut(BaseModel):
