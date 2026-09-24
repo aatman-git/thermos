@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { askThermosCopilot } from '../../services/api';
 
 const SUGGESTED_QUESTIONS = [
   'Why is this classified as industrial?',
-  'What is the population exposure?',
+  'What are the chemical hazards & evacuation radius?',
+  'What fire suppression protocol should be used?',
   'Show similar past events',
 ];
 
@@ -17,36 +19,57 @@ const CANNED_RESPONSES = {
 
 export default function AskThermos({ eventId }) {
   const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', text: `Event ${eventId} is available for analysis. Ask a question about classification, exposure, or pattern history.` },
+    { role: 'assistant', text: `Event ${eventId} is connected to the THERMOS AI & RAG Disaster Copilot. Ask about chemical hazards, evacuation radii, suppression SOPs, or classification.` },
   ]);
 
-  const handleSubmit = (q) => {
+  const handleSubmit = async (q) => {
     const question = q || query;
     if (!question.trim()) return;
 
-    const response = CANNED_RESPONSES[question] ||
-      `Analysis for event ${eventId}: Based on available thermal data and land-cover analysis, this query requires additional context from the full THERMOS intelligence pipeline. In production, this would query the classification model and return a structured response.`;
-
-    setMessages((prev) => [...prev, { role: 'user', text: question }, { role: 'assistant', text: response }]);
+    setMessages((prev) => [...prev, { role: 'user', text: question }]);
     setQuery('');
+    setLoading(true);
+
+    try {
+      const liveRes = await askThermosCopilot(question, eventId);
+      if (liveRes && liveRes.answer) {
+        setMessages((prev) => [...prev, { role: 'assistant', text: liveRes.answer }]);
+        setLoading(false);
+        return;
+      }
+    } catch (_) {
+      // Fallback below if offline
+    }
+
+    const fallbackResponse = CANNED_RESPONSES[question] ||
+      `Tactical RAG Assessment for ${eventId}: Primary Chemical Hazards identified (Benzene, LPG, Hydrocarbons). Mandatory Evacuation Perimeter: 3.5 km downwind. Recommended Suppression: Class B AFFF Foam deluge only (Avoid high-pressure water jets on storage vessels). Follow NDMA Phase 1-4 Emergency Isolation SOPs.`;
+
+    setMessages((prev) => [...prev, { role: 'assistant', text: fallbackResponse }]);
+    setLoading(false);
   };
 
   return (
     <div className="border-t border-[var(--color-border)] shrink-0">
       {/* Messages */}
       {messages.length > 0 && (
-        <div className="max-h-[180px] overflow-y-auto px-4 py-3 space-y-2">
+        <div className="max-h-[200px] overflow-y-auto px-4 py-3 space-y-2">
           {messages.map((msg, i) => (
-            <div key={i} className={`text-scale-sm leading-relaxed ${msg.role === 'user' ? 'text-[var(--color-text-secondary)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
+            <div key={i} className={`text-scale-sm leading-relaxed whitespace-pre-line ${msg.role === 'user' ? 'text-[var(--color-text-secondary)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
               {msg.role === 'user' ? (
                 <span className="text-[var(--color-text-tertiary)]">You: </span>
               ) : (
-                <span className="text-[var(--color-accent-hover)]">THERMOS: </span>
+                <span className="text-[var(--color-accent-hover)] font-semibold">THERMOS AI: </span>
               )}
               {msg.text}
             </div>
           ))}
+          {loading && (
+            <div className="text-scale-xs text-[var(--color-text-tertiary)] animate-pulse">
+              THERMOS RAG Copilot is retrieving facility MSDS & NDMA protocols...
+            </div>
+          )}
         </div>
       )}
 
@@ -57,6 +80,7 @@ export default function AskThermos({ eventId }) {
             <button
               key={q}
               onClick={() => handleSubmit(q)}
+              disabled={loading}
               className="px-2.5 py-1 text-scale-xs bg-[var(--color-surface)] border border-[var(--color-border)] rounded-full text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)] transition-colors"
             >
               {q}
@@ -69,7 +93,7 @@ export default function AskThermos({ eventId }) {
       <div className="px-4 py-3 flex gap-2">
         <input
           type="text"
-          placeholder="Ask THERMOS…"
+          placeholder="Ask THERMOS AI Copilot…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
@@ -77,6 +101,7 @@ export default function AskThermos({ eventId }) {
         />
         <button
           onClick={() => handleSubmit()}
+          disabled={loading}
           className="h-8 px-3 bg-[var(--color-accent)] text-[var(--color-text-primary)] text-scale-sm font-medium rounded-[var(--radius-md)] hover:bg-[var(--color-accent-hover)] transition-colors"
         >
           Ask

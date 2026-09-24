@@ -1,15 +1,54 @@
-const API_BASE_URL = (import.meta.env.VITE_THERMOS_API_URL || 'https://thermos-backend-gz3d.onrender.com').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_THERMOS_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+const FALLBACK_CLOUD_URL = 'https://thermos-backend-gz3d.onrender.com';
+
+async function fetchWithFallback(path, options = {}) {
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, options);
+    if (res.ok) return await res.json();
+  } catch (_) {
+    // Try cloud backend fallback if localhost is not running
+  }
+  const cloudRes = await fetch(`${FALLBACK_CLOUD_URL}${path}`, options);
+  if (!cloudRes.ok) throw new Error(`Request failed (${cloudRes.status})`);
+  return cloudRes.json();
+}
 
 export async function fetchAnomalies() {
-  const response = await fetch(`${API_BASE_URL}/api/anomalies`);
-  if (!response.ok) throw new Error(`Anomalies request failed (${response.status})`);
-  return response.json();
+  return fetchWithFallback('/api/anomalies');
 }
 
 export async function fetchStats() {
-  const response = await fetch(`${API_BASE_URL}/api/stats`);
-  if (!response.ok) throw new Error(`Stats request failed (${response.status})`);
-  return response.json();
+  return fetchWithFallback('/api/stats');
+}
+
+export async function askThermosCopilot(query, anomalyId = null, facilityId = null) {
+  try {
+    const data = await fetchWithFallback('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, facility_id: facilityId }),
+    });
+    return data;
+  } catch (_) {
+    try {
+      const ragData = await fetchWithFallback('/api/rag/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, anomaly_id: anomalyId, facility_id: facilityId }),
+      });
+      return ragData;
+    } catch (err) {
+      return null;
+    }
+  }
+}
+
+export async function analyzeHotspotAI(payload) {
+  return fetchWithFallback('/api/ai/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function normalizeAnomaly(feature) {
