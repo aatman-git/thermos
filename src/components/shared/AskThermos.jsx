@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { askThermosCopilot } from '../../services/api';
 
 const SUGGESTED_QUESTIONS = [
@@ -17,12 +17,44 @@ const CANNED_RESPONSES = {
     'Three similar events were detected in this region over the past 90 days: THR-2301 (72h persistence, resolved), THR-2287 (active, 120h), and THR-2215 (96h, classified as routine flaring). All share similar FRP profiles and industrial proximity characteristics.',
 };
 
-export default function AskThermos({ eventId }) {
+function renderFormattedMessage(text) {
+  if (!text) return null;
+  const cleaned = text.replace(/^###\s*/gm, '');
+  const parts = cleaned.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={idx} className="font-semibold text-[var(--color-text-primary)]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={idx}>{part}</span>;
+  });
+}
+
+export default function AskThermos({ eventId, event }) {
+  const props = event?.properties || event || {};
+  const resolvedId = eventId || props.id || 'THM-001';
+  const regionLabel = props.region ? ` (${props.region})` : '';
+
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', text: `Event ${eventId} is connected to the THERMOS AI & RAG Disaster Copilot. Ask about chemical hazards, evacuation radii, suppression SOPs, or classification.` },
+    {
+      role: 'assistant',
+      text: `Event ${resolvedId}${regionLabel} is connected to the THERMOS AI & RAG Disaster Copilot. Ask about chemical hazards, evacuation radii, suppression SOPs, or classification.`,
+    },
   ]);
+
+  useEffect(() => {
+    setMessages([
+      {
+        role: 'assistant',
+        text: `Event ${resolvedId}${regionLabel} is connected to the THERMOS AI & RAG Disaster Copilot. Ask about chemical hazards, evacuation radii, suppression SOPs, or classification.`,
+      },
+    ]);
+  }, [resolvedId, regionLabel]);
 
   const handleSubmit = async (q) => {
     const question = q || query;
@@ -33,7 +65,7 @@ export default function AskThermos({ eventId }) {
     setLoading(true);
 
     try {
-      const liveRes = await askThermosCopilot(question, eventId);
+      const liveRes = await askThermosCopilot(question, resolvedId, props);
       if (liveRes && liveRes.answer) {
         setMessages((prev) => [...prev, { role: 'assistant', text: liveRes.answer }]);
         setLoading(false);
@@ -44,7 +76,7 @@ export default function AskThermos({ eventId }) {
     }
 
     const fallbackResponse = CANNED_RESPONSES[question] ||
-      `Tactical RAG Assessment for ${eventId}: Primary Chemical Hazards identified (Benzene, LPG, Hydrocarbons). Mandatory Evacuation Perimeter: 3.5 km downwind. Recommended Suppression: Class B AFFF Foam deluge only (Avoid high-pressure water jets on storage vessels). Follow NDMA Phase 1-4 Emergency Isolation SOPs.`;
+      `Tactical RAG Assessment for ${resolvedId}: Primary Chemical Hazards identified (Benzene, LPG, Hydrocarbons). Mandatory Evacuation Perimeter: 3.5 km downwind. Recommended Suppression: Class B AFFF Foam deluge only (Avoid high-pressure water jets on storage vessels). Follow NDMA Phase 1-4 Emergency Isolation SOPs.`;
 
     setMessages((prev) => [...prev, { role: 'assistant', text: fallbackResponse }]);
     setLoading(false);
@@ -54,7 +86,7 @@ export default function AskThermos({ eventId }) {
     <div className="border-t border-[var(--color-border)] shrink-0">
       {/* Messages */}
       {messages.length > 0 && (
-        <div className="max-h-[200px] overflow-y-auto px-4 py-3 space-y-2">
+        <div className="max-h-[240px] overflow-y-auto px-4 py-3 space-y-2.5">
           {messages.map((msg, i) => (
             <div key={i} className={`text-scale-sm leading-relaxed whitespace-pre-line ${msg.role === 'user' ? 'text-[var(--color-text-secondary)] font-medium' : 'text-[var(--color-text-primary)]'}`}>
               {msg.role === 'user' ? (
@@ -62,7 +94,7 @@ export default function AskThermos({ eventId }) {
               ) : (
                 <span className="text-[var(--color-accent-hover)] font-semibold">THERMOS AI: </span>
               )}
-              {msg.text}
+              {renderFormattedMessage(msg.text)}
             </div>
           ))}
           {loading && (

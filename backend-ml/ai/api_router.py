@@ -1,26 +1,33 @@
+"""
+FastAPI Router for the Standalone `ai` Package
+==============================================
+Exposes `/api/ai/status`, `/api/ai/analyze`, and `/api/ai/chat` endpoints.
+"""
 from typing import Optional
-from pydantic import BaseModel, Field
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
-from ai.spatial_engine import spatial_engine
-from ai.classifier import anomaly_classifier
-from ai.copilot import disaster_copilot
+from .spatial_engine import spatial_engine
+from .classifier import anomaly_classifier
+from .copilot import disaster_copilot
 
-router = APIRouter(prefix="/ai", tags=["AI & Disaster Copilot Engine"])
+router = APIRouter(prefix="/api/ai", tags=["Standalone AI Engine & RAG Copilot"])
 
 
 class SatelliteHotspotInput(BaseModel):
-    latitude: float = Field(22.358, description="Latitude of satellite hotspot")
-    longitude: float = Field(69.829, description="Longitude of satellite hotspot")
-    frp_mw: float = Field(140.0, description="Fire Radiative Power in MW")
-    brightness_k: float = Field(378.0, description="Brightness Temperature in Kelvin")
-    confidence: str = Field("h", description="FIRMS confidence (l/n/h)")
-    daynight: str = Field("N", description="Day (D) or Night (N)")
+    latitude: float = Field(..., example=22.370, description="Hotspot latitude")
+    longitude: float = Field(..., example=69.855, description="Hotspot longitude")
+    frp_mw: float = Field(85.0, example=145.5, description="Fire Radiative Power (MW)")
+    brightness_k: float = Field(355.0, example=382.0, description="Brightness Temperature (K)")
+    confidence: str = Field("h", example="h", description="Satellite confidence ('l', 'n', 'h')")
+    daynight: str = Field("N", example="N", description="Pass time ('D' or 'N')")
 
 
 class CopilotQueryInput(BaseModel):
     query: str = Field(..., description="Question for the AI Disaster Copilot")
     facility_id: Optional[str] = Field(None, description="Optional facility ID filter")
+    latitude: Optional[float] = Field(None, description="Optional incident latitude")
+    longitude: Optional[float] = Field(None, description="Optional incident longitude")
 
 
 @router.get("/status")
@@ -80,7 +87,19 @@ async def analyze_hotspot_end_to_end(payload: SatelliteHotspotInput):
 @router.post("/chat")
 async def chat_with_ai_copilot(payload: CopilotQueryInput):
     """Conversational RAG Disaster Copilot for chemical hazards and NDMA SOPs."""
+    fac_id = payload.facility_id
+    if not fac_id and payload.latitude is not None and payload.longitude is not None:
+        features = spatial_engine.extract_14_features(
+            lat=payload.latitude,
+            lon=payload.longitude,
+            frp=80.0,
+            bright_temp_k=355.0
+        )
+        nearest_fac = features.get("nearest_facility")
+        if nearest_fac:
+            fac_id = nearest_fac.get("id")
+
     return await disaster_copilot.ask_copilot(
         query=payload.query,
-        facility_id=payload.facility_id
+        facility_id=fac_id
     )

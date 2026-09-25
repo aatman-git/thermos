@@ -21,12 +21,15 @@ export async function fetchStats() {
   return fetchWithFallback('/api/stats');
 }
 
-export async function askThermosCopilot(query, anomalyId = null, facilityId = null) {
+export async function askThermosCopilot(query, anomalyId = null, eventProps = null) {
+  const lat = eventProps?.lat ?? eventProps?.latitude ?? null;
+  const lng = eventProps?.lng ?? eventProps?.longitude ?? null;
+  const facilityId = eventProps?.facility_id ?? null;
   try {
     const data = await fetchWithFallback('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, facility_id: facilityId }),
+      body: JSON.stringify({ query, facility_id: facilityId, latitude: lat, longitude: lng }),
     });
     return data;
   } catch (_) {

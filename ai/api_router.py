@@ -21,6 +21,8 @@ class SatelliteHotspotInput(BaseModel):
 class CopilotQueryInput(BaseModel):
     query: str = Field(..., description="Question for the AI Disaster Copilot")
     facility_id: Optional[str] = Field(None, description="Optional facility ID filter")
+    latitude: Optional[float] = Field(None, description="Optional incident latitude")
+    longitude: Optional[float] = Field(None, description="Optional incident longitude")
 
 
 @router.get("/status")
@@ -80,7 +82,19 @@ async def analyze_hotspot_end_to_end(payload: SatelliteHotspotInput):
 @router.post("/chat")
 async def chat_with_ai_copilot(payload: CopilotQueryInput):
     """Conversational RAG Disaster Copilot for chemical hazards and NDMA SOPs."""
+    fac_id = payload.facility_id
+    if not fac_id and payload.latitude is not None and payload.longitude is not None:
+        features = spatial_engine.extract_14_features(
+            lat=payload.latitude,
+            lon=payload.longitude,
+            frp=80.0,
+            bright_temp_k=355.0
+        )
+        nearest_fac = features.get("nearest_facility")
+        if nearest_fac:
+            fac_id = nearest_fac.get("id")
+
     return await disaster_copilot.ask_copilot(
         query=payload.query,
-        facility_id=payload.facility_id
+        facility_id=fac_id
     )
