@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useMap } from './MapCore';
-import { useStore } from '../../store/useStore';
+import { filterEvents, useStore } from '../../store/useStore';
 
 const SOURCE_ID = 'thermal-heatmap';
 const LAYER_ID = 'thermal-heat';
@@ -27,63 +27,74 @@ const HEATMAP_STYLES = {
 export default function HeatmapLayer() {
   const { map, mapReady } = useMap();
   const mapMode = useStore((s) => s.mapMode);
-  const getFilteredGeoJSON = useStore((s) => s.getFilteredGeoJSON);
+  const events = useStore((s) => s.events);
+  const filters = useStore((s) => s.filters);
+  const timeSliderValue = useStore((s) => s.timeSliderValue);
 
-  const heatData = useMemo(() => {
-    const geojson = getFilteredGeoJSON();
-    return {
-      type: 'FeatureCollection',
-      features: geojson.features.map((feature) => ({
-        ...feature,
-        properties: {
-          ...feature.properties,
-          weight: Math.min(1, feature.properties.risk_score / 100),
-        },
-      })),
-    };
-  }, [getFilteredGeoJSON]);
+  const heatData = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: filterEvents(events, filters, timeSliderValue).map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        weight: Math.min(1, (feature.properties.risk_score || 0) / 100),
+      },
+    })),
+  }), [events, filters, timeSliderValue]);
 
   useEffect(() => {
     if (!map || !mapReady) return;
 
-    if (!map.getSource(SOURCE_ID)) {
-      map.addSource(SOURCE_ID, {
-        type: 'geojson',
-        data: heatData,
-      });
-    } else {
-      map.getSource(SOURCE_ID).setData(heatData);
-    }
+    const addLayer = () => {
+      try {
+        if (!map.getSource(SOURCE_ID)) {
+          map.addSource(SOURCE_ID, {
+            type: 'geojson',
+            data: heatData,
+          });
+        } else {
+          map.getSource(SOURCE_ID).setData(heatData);
+        }
 
-    const style = HEATMAP_STYLES[mapMode] || HEATMAP_STYLES.events;
+        if (map.getLayer(LAYER_ID)) return;
 
-    if (map.getLayer(LAYER_ID)) {
-      map.removeLayer(LAYER_ID);
-    }
+        const style = HEATMAP_STYLES[mapMode] || HEATMAP_STYLES.events;
+        map.addLayer({
+          id: LAYER_ID,
+          type: 'heatmap',
+          source: SOURCE_ID,
+          paint: {
+            'heatmap-weight': ['interpolate', ['linear'], ['get', 'risk_score'], 0, 0, 100, 1],
+            'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 8, 10, 20],
+            'heatmap-intensity': 1,
+            'heatmap-color': [
+              'interpolate',
+              ['linear'],
+              ['heatmap-density'],
+              0, 'rgba(0,0,0,0)',
+              0.2, style.colorRamp[0],
+              0.45, style.colorRamp[1],
+              0.7, style.colorRamp[2],
+              1, style.colorRamp[3],
+            ],
+            'heatmap-opacity': style.opacity,
+          },
+        });
+      } catch (error) {
+        if (error?.message !== 'Style is not done loading.') {
+          console.warn('HeatmapLayer: addLayer error', error);
+        }
+      }
+    };
 
-    map.addLayer({
-      id: LAYER_ID,
-      type: 'heatmap',
-      source: SOURCE_ID,
-      paint: {
-        'heatmap-weight': ['interpolate', ['linear'], ['get', 'risk_score'], 0, 0, 100, 1],
-        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 8, 10, 20],
-        'heatmap-intensity': 1,
-        'heatmap-color': [
-          'interpolate',
-          ['linear'],
-          ['heatmap-density'],
-          0, 'rgba(0,0,0,0)',
-          0.2, style.colorRamp[0],
-          0.45, style.colorRamp[1],
-          0.7, style.colorRamp[2],
-          1, style.colorRamp[3],
-        ],
-        'heatmap-opacity': style.opacity,
-      },
-    });
+    addLayer();
+    const retryTimers = [50, 250, 750, 1500, 3000, 6000].map((delay) => setTimeout(addLayer, delay));
+    const onStyleLoad = () => addLayer();
+    map.on('style.load', onStyleLoad);
 
     return () => {
+      retryTimers.forEach(clearTimeout);
+      map.off('style.load', onStyleLoad);
       if (map.getLayer(LAYER_ID)) {
         map.removeLayer(LAYER_ID);
       }

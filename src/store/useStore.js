@@ -1,23 +1,74 @@
 import { create } from 'zustand';
 import { mockGeoJSON } from '../data/mockData';
-import { fetchLiveEvents } from '../services/api';
+import { fetchLiveEvents, predictLocation as apiPredictLocation } from '../services/api';
 
-const PRESET_TIME_WINDOWS = {
-  '24H': [0.96, 1],
-  '7D': [0.75, 1],
+export const TIME_PRESETS = {
+  '24H': [29 / 30, 1],
+  '7D': [23 / 30, 1],
   '30D': [0, 1],
 };
 
-const DATE_RANGE_DAYS = {
-  '24H': 1,
-  '7D': 7,
-  '30D': 30,
-};
+const TEMPORAL_HORIZON_DAYS = 30;
+
+export function filterEvents(events, filters, timeSliderValue) {
+  if (!events || !Array.isArray(events.features)) return [];
+
+  const [startNorm, endNorm] = timeSliderValue || [0, 1];
+  const totalDays = TEMPORAL_HORIZON_DAYS;
+  const minAgeDays = Math.max(0, (1 - endNorm) * totalDays);
+  const maxAgeDays = Math.max(0, (1 - startNorm) * totalDays);
+  const now = Date.now();
+
+  return events.features.filter((feature) => {
+    const properties = feature.properties || {};
+    const detectedAt = properties.first_detected
+      ? new Date(properties.first_detected)
+      : (properties.acq_date ? new Date(properties.acq_date) : null);
+    const ageDays = detectedAt && !isNaN(detectedAt.getTime())
+      ? Math.max(0, (now - detectedAt.getTime()) / 86400000)
+      : 0;
+
+    // A full-window selection should include events with missing timestamps.
+    if (startNorm > 0.05 || endNorm < 0.95) {
+      if (ageDays < minAgeDays || ageDays > maxAgeDays) return false;
+    }
+
+    if (filters.confidenceMin > 0 && (properties.confidence || 0) < filters.confidenceMin) return false;
+
+    const classification = typeof properties.classification === 'string'
+      ? properties.classification
+      : properties.classification?.category;
+    if (
+      filters.categories.length > 0
+      && !filters.categories.includes(properties.category)
+      && !filters.categories.includes(classification)
+    ) return false;
+
+    if (filters.riskTiers.length > 0 && !filters.riskTiers.includes(properties.risk_tier)) return false;
+
+    if (filters.bbox) {
+      const { minLng, maxLng, minLat, maxLat } = filters.bbox;
+      const lng = Number(properties.lng ?? feature.geometry?.coordinates?.[0] ?? 0);
+      const lat = Number(properties.lat ?? feature.geometry?.coordinates?.[1] ?? 0);
+      if (lng < minLng || lng > maxLng || lat < minLat || lat > maxLat) return false;
+    }
+
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      const classificationText = typeof properties.classification === 'string'
+        ? properties.classification
+        : (properties.classification?.category || '');
+      const searchable = `${properties.id || ''} ${properties.region || ''} ${properties.category || ''} ${classificationText} ${properties.land_cover || ''}`.toLowerCase();
+      if (!searchable.includes(query)) return false;
+    }
+
+    return true;
+  });
+}
 
 /**
  * Central store — single source of truth for selected event,
- * active filters, map display state, and time window. Read/written by Map,
- * Priority Queue, and Incident Drawer.
+ * active filters, map display state, and location predictions.
  */
 export const useStore = create((set, get) => ({
   // All events (GeoJSON)
@@ -29,7 +80,11 @@ export const useStore = create((set, get) => ({
     set({ loading: true, apiError: null });
     try {
       const events = await fetchLiveEvents();
-      set({ events, dataSource: 'live', loading: false });
+      set({
+        events,
+        dataSource: events.metadata?.source === 'demo' ? 'demo' : 'live',
+        loading: false,
+      });
     } catch (error) {
       set({ apiError: error.message, loading: false });
     }
@@ -48,7 +103,26 @@ export const useStore = create((set, get) => ({
   getSelectedEvent: () => {
     const { events, selectedEventId } = get();
     if (!selectedEventId) return null;
-    return events.features.find((f) => f.properties.id === selectedEventId) || null;
+    return events.features.find((f) => f.properties?.id === selectedEventId || f.id === selectedEventId) || null;
+  },
+
+  // Location-based ML prediction feature
+  predictCoords: null, // { lat, lng }
+  prediction: null,
+  predictLoading: false,
+  predictError: null,
+  setPredictCoords: (coords) => set({ predictCoords: coords }),
+  clearPrediction: () => set({ predictCoords: null, prediction: null, predictError: null }),
+  predictLocation: async (lat, lng) => {
+    set({ predictCoords: { lat, lng }, predictLoading: true, predictError: null });
+    try {
+      const res = await apiPredictLocation({ latitude: lat, longitude: lng });
+      set({ prediction: res, predictLoading: false });
+      return res;
+    } catch (err) {
+      set({ predictError: err.message, predictLoading: false });
+      return null;
+    }
   },
 
   // Filters
@@ -61,7 +135,17 @@ export const useStore = create((set, get) => ({
     bbox: null,
   },
   setFilter: (key, value) =>
-    set((state) => ({ filters: { ...state.filters, [key]: value } })),
+    set((state) => {
+      const filters = { ...state.filters, [key]: value };
+      if (key === 'dateRange' && TIME_PRESETS[value]) {
+        return {
+          filters,
+          timeRange: value,
+          timeSliderValue: TIME_PRESETS[value],
+        };
+      }
+      return { filters };
+    }),
   resetFilters: () =>
     set({
       filters: {
@@ -72,14 +156,16 @@ export const useStore = create((set, get) => ({
         searchQuery: '',
         bbox: null,
       },
+      timeRange: '30D',
+      timeSliderValue: TIME_PRESETS['30D'],
     }),
 
   // Time range for bottom strip and map window
-  timeRange: '24H',
+  timeRange: '30D',
   setTimeRange: (range) => {
     set((state) => ({
       timeRange: range,
-      timeSliderValue: PRESET_TIME_WINDOWS[range] || [0, 1],
+      timeSliderValue: TIME_PRESETS[range] || TIME_PRESETS['30D'],
       filters: {
         ...state.filters,
         dateRange: range,
@@ -88,7 +174,7 @@ export const useStore = create((set, get) => ({
   },
 
   // Time slider value (0–1 normalized range)
-  timeSliderValue: PRESET_TIME_WINDOWS['24H'],
+  timeSliderValue: [0, 1],
   setTimeSliderValue: (val) => set({ timeSliderValue: val }),
 
   mapMode: 'events',
@@ -100,31 +186,7 @@ export const useStore = create((set, get) => ({
   // Computed: filtered events
   getFilteredEvents: () => {
     const { events, filters, timeSliderValue } = get();
-    const [startNorm, endNorm] = timeSliderValue || [0, 1];
-    const totalDays = DATE_RANGE_DAYS[filters.dateRange] || 30;
-    const minAgeDays = Math.max(0, (1 - endNorm) * totalDays);
-    const maxAgeDays = Math.max(0, (1 - startNorm) * totalDays);
-    const now = Date.now();
-
-    return events.features.filter((f) => {
-      const p = f.properties;
-      const ageDays = (now - new Date(p.first_detected).getTime()) / 86400000;
-
-      if (ageDays < minAgeDays || ageDays > maxAgeDays) return false;
-      if (p.confidence < filters.confidenceMin) return false;
-      if (filters.categories.length > 0 && !filters.categories.includes(p.category)) return false;
-      if (filters.riskTiers.length > 0 && !filters.riskTiers.includes(p.risk_tier)) return false;
-      if (filters.bbox) {
-        const { minLng, maxLng, minLat, maxLat } = filters.bbox;
-        if (p.lng < minLng || p.lng > maxLng || p.lat < minLat || p.lat > maxLat) return false;
-      }
-      if (filters.searchQuery) {
-        const q = filters.searchQuery.toLowerCase();
-        const searchable = `${p.id} ${p.region} ${p.category} ${p.land_cover}`.toLowerCase();
-        if (!searchable.includes(q)) return false;
-      }
-      return true;
-    });
+    return filterEvents(events, filters, timeSliderValue);
   },
 
   // Filtered GeoJSON (for map source)

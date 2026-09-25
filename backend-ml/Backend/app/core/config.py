@@ -26,11 +26,11 @@ class Settings(BaseSettings):
     # Redis Cache & Broker
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # NASA FIRMS (Supports both FIRMS_MAP_KEY and FIRMS_API_KEY)
-    FIRMS_MAP_KEY: str = ""
+    # NASA FIRMS (Supports FIRMS_API_KEY and FIRMS_MAP_KEY)
     FIRMS_API_KEY: str = ""
+    FIRMS_MAP_KEY: str = ""
     FIRMS_API_BASE_URL: str = "https://firms.modaps.eosdis.nasa.gov/api"
-    ENABLE_LIVE_FIRMS: bool = False
+    ENABLE_LIVE_FIRMS: bool = True
     FIRMS_POLL_INTERVAL_MIN: int = 15
     FIRMS_TIMEOUT_S: float = 20.0
 
@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     OSM_QUERY_RADIUS_KM: float = 10.0
     ENABLE_OSM: bool = True
     OSM_OVERPASS_URL: str = "https://overpass-api.de/api/interpreter"
-    OSM_TIMEOUT_S: float = 8.0
+    OSM_TIMEOUT_S: float = 2.5
     WORLDPOP_DATA_PATH: str = ""
     LANDCOVER_DATA_PATH: str = ""
 
@@ -73,12 +73,25 @@ class Settings(BaseSettings):
     MAX_API_PAGE_SIZE: int = 200
     DEFAULT_PAGE_SIZE: int = 50
 
-    # AI
+    # AI Explanation & Investigator (Powered by Google Gemini)
     ENABLE_AI: bool = True
-    LLM_PROVIDER: str = "none"  # openai | gemini | none
-    OPENAI_API_KEY: str = ""
+    LLM_PROVIDER: str = "gemini"  # gemini | none
     GEMINI_API_KEY: str = ""
-    AI_MODEL: str = "gpt-4o-mini"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
+    AI_MODEL: str = "gemini-flash-lite-latest"
+    OPENAI_API_KEY: str = ""
+
+    # ESA WorldCover WMS (Public global 10m land cover; no API key or OAuth credentials required)
+    WORLDCOVER_WMS_URL: str = "https://services.terrascope.be/wms/v2"
+    WORLDCOVER_LAYER: str = "WORLDCOVER_2021_MAP"
+    WORLDCOVER_WMS_FALLBACK_URL: str = "https://titiler.terrascope.be/wms"
+    WORLDCOVER_FALLBACK_LAYER: str = "esa-worldcover-map-10m-2021-v2_map"
+    WORLDCOVER_TIMEOUT_S: float = 10.0
+
+    # Deprecated Copernicus Sentinel Hub settings (optional, retained for backward compatibility)
+    COPERNICUS_CLIENT_ID: str = ""
+    COPERNICUS_CLIENT_SECRET: str = ""
+    COPERNICUS_TIMEOUT_S: float = 10.0
 
     # Scheduler
     ENABLE_SCHEDULER: bool = False
@@ -88,11 +101,14 @@ class Settings(BaseSettings):
 
     @property
     def active_firms_key(self) -> str:
-        return (self.FIRMS_MAP_KEY or self.FIRMS_API_KEY).strip()
+        key = self.FIRMS_API_KEY or self.FIRMS_MAP_KEY or os.environ.get("FIRMS_API_KEY", "") or os.environ.get("FIRMS_MAP_KEY", "")
+        return key.strip()
 
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if not self.is_production and "http://localhost:5174" not in origins:
+            origins.append("http://localhost:5174")
         if self.is_production:
             # Strictly reject wildcard origins in production
             origins = [o for o in origins if o != "*"]

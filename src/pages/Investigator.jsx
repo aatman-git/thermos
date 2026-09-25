@@ -9,17 +9,18 @@ import AskThermos from '../components/shared/AskThermos';
 import { analyzeHotspotAI } from '../services/api';
 
 export default function Investigator() {
-  const events = mockGeoJSON.features;
+  const storeEvents = useStore((s) => s.events?.features);
+  const events = (storeEvents && storeEvents.length > 0) ? storeEvents : mockGeoJSON.features;
   const selectEvent = useStore((s) => s.selectEvent);
   const selectedEventId = useStore((s) => s.selectedEventId);
 
-  const [currentId, setCurrentId] = useState(selectedEventId || events[0].properties.id);
+  const [currentId, setCurrentId] = useState(selectedEventId || events[0]?.properties?.id);
   const [activeTab, setActiveTab] = useState('spectral'); // 'spectral' | 'meteorology' | 'decision_tree' | 'evidence'
   const [liveAiResult, setLiveAiResult] = useState(null);
   const [isScanningAi, setIsScanningAi] = useState(false);
 
   const currentEvent = useMemo(() => {
-    return events.find((e) => e.properties.id === currentId) || events[0];
+    return events.find((e) => e.properties?.id === currentId) || events[0] || { properties: {} };
   }, [events, currentId]);
 
   const p = currentEvent.properties;

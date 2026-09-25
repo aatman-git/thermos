@@ -83,6 +83,7 @@ def test_risk_engine_levels():
 def test_firms_url_format():
     from app.services.firms_service import FirmsService
     fs = FirmsService()
+    fs.settings.FIRMS_API_KEY = "dummy_key"
     fs.settings.FIRMS_MAP_KEY = "dummy_key"
     url = fs._url("VIIRS_SNPP_NRT", "68,6,98,38", 2)
     assert "/area/csv/dummy_key/VIIRS_SNPP_NRT/68,6,98,38/2" in url

@@ -74,15 +74,8 @@ export default function IndustrialBoundaryLayer() {
   useEffect(() => {
     if (!map || !mapReady) return;
 
-    const addLayersWhenReady = () => {
+    const addLayers = () => {
       try {
-        // Check if style is loaded
-        if (!map.isStyleLoaded()) {
-          console.log('IndustrialBoundaryLayer: waiting for style to load');
-          map.once('styledata', addLayersWhenReady);
-          return;
-        }
-
         if (!map.getSource(SOURCE_ID)) {
           map.addSource(SOURCE_ID, {
             type: 'geojson',
@@ -103,13 +96,20 @@ export default function IndustrialBoundaryLayer() {
           });
         }
       } catch (error) {
-        console.error('IndustrialBoundaryLayer: error adding layer', error);
+        if (error?.message !== 'Style is not done loading.') {
+          console.warn('IndustrialBoundaryLayer: error adding layer', error);
+        }
       }
     };
 
-    addLayersWhenReady();
+    addLayers();
+    const retryTimers = [50, 250, 750, 1500, 3000, 6000].map((delay) => setTimeout(addLayers, delay));
+    const onStyleLoad = () => addLayers();
+    map.on('style.load', onStyleLoad);
 
     return () => {
+      retryTimers.forEach(clearTimeout);
+      map.off('style.load', onStyleLoad);
       if (map.getLayer(LAYER_ID)) {
         map.removeLayer(LAYER_ID);
       }

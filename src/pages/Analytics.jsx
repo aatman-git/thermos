@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useStore } from '../store/useStore';
 import { CATEGORY_COLORS, RISK_COLORS, mockGeoJSON } from '../data/mockData';
 import { getCategoryShort } from '../utils/formatters';
 import ChartCard from '../components/shared/ChartCard';
@@ -31,7 +32,8 @@ const TOOLTIP_STYLE = {
 };
 
 export default function Analytics() {
-  const events = mockGeoJSON.features;
+  const storeEvents = useStore((s) => s.events?.features);
+  const events = (storeEvents && storeEvents.length > 0) ? storeEvents : mockGeoJSON.features;
 
   // Thermal anomalies over time (last 30 days, grouped by day)
   const timelineData = useMemo(() => {

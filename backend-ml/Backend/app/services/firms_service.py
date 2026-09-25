@@ -169,7 +169,7 @@ class FirmsService:
 
     @property
     def enabled(self) -> bool:
-        return bool(self.settings.active_firms_key) and self.settings.ENABLE_LIVE_FIRMS
+        return bool(self.settings.active_firms_key)
 
     def _url(self, source: str, bbox: str, day_range: int) -> str:
         base = self.settings.FIRMS_API_BASE_URL.rstrip("/")
@@ -199,7 +199,11 @@ class FirmsService:
                         continue
 
                     response.raise_for_status()
-                    return response.text
+                    text = response.text
+                    if "Invalid MAP_KEY" in text or "Bad MAP_KEY" in text or "does not exist" in text:
+                        log.error("NASA FIRMS rejected MAP_KEY: %s", text.strip())
+                        raise ValueError(f"NASA FIRMS API error: {text.strip()}")
+                    return text
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 wait_time = min(2 ** attempt, 8)
                 log.warning("FIRMS connection/timeout error: %s. Backing off %ss (attempt %s/%s)", type(e).__name__, wait_time, attempt, max_retries)
@@ -231,7 +235,11 @@ class FirmsService:
                         continue
 
                     response.raise_for_status()
-                    return response.text
+                    text = response.text
+                    if "Invalid MAP_KEY" in text or "Bad MAP_KEY" in text or "does not exist" in text:
+                        log.error("NASA FIRMS rejected MAP_KEY: %s", text.strip())
+                        raise ValueError(f"NASA FIRMS API error: {text.strip()}")
+                    return text
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 wait_time = min(2 ** attempt, 8)
                 log.warning("FIRMS async connection/timeout error: %s. Backing off %ss (attempt %s/%s)", type(e).__name__, wait_time, attempt, max_retries)
@@ -317,3 +325,135 @@ class FirmsService:
         obs = self._fetch_csv(source, "68,6,98,38", day_range)
         from app.services.geo_service import haversine_km
         return [o for o in obs if haversine_km(lat, lon, o["latitude"], o["longitude"]) <= radius_km]
+
+    def get_fallback_events(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Realistic fallback thermal events for demo or offline operation."""
+        from datetime import timedelta
+        curated = [
+            {"id": "EVT-JAM01", "latitude": 22.4707, "longitude": 70.0577, "brightness_k": 348.5,
+             "frp_mw": 32.4, "confidence": "high", "confidence_numeric": 90.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Persistent Source", "risk_score": 78, "risk_level": "HIGH",
+             "region": "Jamnagar Refinery Cluster, Gujarat"},
+            {"id": "EVT-DAH02", "latitude": 21.7125, "longitude": 72.5842, "brightness_k": 395.2,
+             "frp_mw": 142.8, "confidence": "high", "confidence_numeric": 95.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Accidental Fire", "risk_score": 92, "risk_level": "CRITICAL",
+             "region": "Dahej Petrochemical SEZ, Gujarat"},
+            {"id": "EVT-VIZ03", "latitude": 17.6868, "longitude": 83.2185, "brightness_k": 352.0,
+             "frp_mw": 48.0, "confidence": "high", "confidence_numeric": 85.0, "daynight": "D",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Thermal Source", "risk_score": 74, "risk_level": "HIGH",
+             "region": "Vizag Industrial Belt, Andhra Pradesh"},
+            {"id": "EVT-BOK04", "latitude": 23.6693, "longitude": 86.1511, "brightness_k": 339.4,
+             "frp_mw": 29.5, "confidence": "nominal", "confidence_numeric": 65.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Persistent Source", "risk_score": 68, "risk_level": "HIGH",
+             "region": "Bokaro Steel Complex, Jharkhand"},
+            {"id": "EVT-PAR05", "latitude": 20.3164, "longitude": 86.6085, "brightness_k": 330.1,
+             "frp_mw": 21.0, "confidence": "nominal", "confidence_numeric": 60.0, "daynight": "D",
+             "satellite": "MODIS", "instrument": "MODIS", "source": "MODIS",
+             "classification": "Industrial Thermal Source", "risk_score": 62, "risk_level": "HIGH",
+             "region": "Paradip Port Area, Odisha"},
+            {"id": "EVT-SIM06", "latitude": 21.9056, "longitude": 86.3417, "brightness_k": 368.0,
+             "frp_mw": 85.2, "confidence": "high", "confidence_numeric": 90.0, "daynight": "D",
+             "satellite": "MODIS", "instrument": "MODIS", "source": "MODIS",
+             "classification": "Wildfire", "risk_score": 84, "risk_level": "HIGH",
+             "region": "Similipal Forest Range, Odisha"},
+            {"id": "EVT-PUN07", "latitude": 30.2458, "longitude": 75.8421, "brightness_k": 318.4,
+             "frp_mw": 11.6, "confidence": "nominal", "confidence_numeric": 60.0, "daynight": "D",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Agricultural Burning", "risk_score": 38, "risk_level": "LOW",
+             "region": "Sangrur Cropland, Punjab"},
+            {"id": "EVT-MAT08", "latitude": 27.4924, "longitude": 77.6737, "brightness_k": 344.2,
+             "frp_mw": 25.8, "confidence": "high", "confidence_numeric": 80.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Gas Flare", "risk_score": 58, "risk_level": "MODERATE",
+             "region": "Mathura Refinery Zone, Uttar Pradesh"},
+            {"id": "EVT-HAL09", "latitude": 22.0257, "longitude": 88.0583, "brightness_k": 336.8,
+             "frp_mw": 19.4, "confidence": "nominal", "confidence_numeric": 65.0, "daynight": "D",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Thermal Source", "risk_score": 55, "risk_level": "MODERATE",
+             "region": "Haldia Industrial Complex, West Bengal"},
+            {"id": "EVT-MAN10", "latitude": 12.9141, "longitude": 74.8560, "brightness_k": 341.0,
+             "frp_mw": 23.0, "confidence": "high", "confidence_numeric": 75.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Gas Flare", "risk_score": 52, "risk_level": "MODERATE",
+             "region": "Mangalore Petrochemicals, Karnataka"},
+            {"id": "EVT-KOC11", "latitude": 9.9312, "longitude": 76.2673, "brightness_k": 332.5,
+             "frp_mw": 18.2, "confidence": "nominal", "confidence_numeric": 60.0, "daynight": "D",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Thermal Source", "risk_score": 48, "risk_level": "MODERATE",
+             "region": "Kochi Industrial Area, Kerala"},
+            {"id": "EVT-BAT12", "latitude": 30.2110, "longitude": 74.9455, "brightness_k": 345.6,
+             "frp_mw": 28.0, "confidence": "high", "confidence_numeric": 82.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Industrial Persistent Source", "risk_score": 65, "risk_level": "HIGH",
+             "region": "Bathinda Refinery, Punjab"},
+            {"id": "EVT-BIN13", "latitude": 24.1785, "longitude": 78.9345, "brightness_k": 338.0,
+             "frp_mw": 22.5, "confidence": "nominal", "confidence_numeric": 70.0, "daynight": "N",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Gas Flare", "risk_score": 54, "risk_level": "MODERATE",
+             "region": "Bina Refinery, Madhya Pradesh"},
+            {"id": "EVT-BAR14", "latitude": 26.2145, "longitude": 71.3852, "brightness_k": 315.0,
+             "frp_mw": 9.5, "confidence": "low", "confidence_numeric": 35.0, "daynight": "D",
+             "satellite": "VIIRS", "instrument": "VIIRS", "source": "VIIRS",
+             "classification": "Unknown", "risk_score": 28, "risk_level": "LOW",
+             "region": "Barmer Basin, Rajasthan"},
+        ]
+        now = datetime.now(timezone.utc)
+        results = []
+        for i, item in enumerate(curated[:limit]):
+            acq = now - timedelta(hours=i * 2 + 1)
+            row = dict(item)
+            row["acq_date"] = acq.strftime("%Y-%m-%d")
+            row["acq_time"] = acq.strftime("%H%M")
+            row["acquired_at"] = acq
+            results.append(row)
+        return results
+
+    def fetch_fires_with_fallback(
+        self,
+        bbox: str = "68,6,98,38",
+        day_range: int = 1,
+        source: str = "VIIRS_SNPP_NRT",
+        limit: int = 500,
+    ) -> tuple[list[dict[str, Any]], str, str | None]:
+        """Fetch real FIRMS data if key is available, with seamless graceful fallback."""
+        if not self.enabled:
+            return (
+                self.get_fallback_events(limit),
+                "demo",
+                "FIRMS_API_KEY not configured. Running in offline/demo fallback mode.",
+            )
+        try:
+            fires = self._fetch_csv(source=source, bbox=bbox, day_range=day_range)
+            # If 1-day yields 0 events for this regional bbox (e.g. between satellite passes),
+            # check the 3-day satellite pass window to retrieve real active thermal events
+            if not fires and day_range < 3:
+                log.info("FIRMS returned 0 events for bbox=%s at day_range=%s; checking 3-day satellite pass window", bbox, day_range)
+                fires = self._fetch_csv(source=source, bbox=bbox, day_range=3)
+
+            # If still 0 events, try VIIRS_NOAA20_NRT 3-day
+            if not fires:
+                log.info("Checking secondary satellite VIIRS_NOAA20_NRT 3-day window for bbox=%s", bbox)
+                try:
+                    fires = self._fetch_csv(source="VIIRS_NOAA20_NRT", bbox=bbox, day_range=3)
+                except Exception as ex_noaa:
+                    log.warning("Secondary satellite check error: %s", ex_noaa)
+
+            if not fires:
+                log.info("FIRMS confirmed 0 active thermal anomalies for bbox=%s in the satellite observation window", bbox)
+                return (
+                    [],
+                    "live",
+                    "No fire hotspots currently detected in requested area in current satellite window.",
+                )
+            return fires[:limit], "live", None
+        except Exception as e:
+            log.warning("FIRMS live fetch error (%s).", e)
+            return (
+                self.get_fallback_events(limit),
+                "demo",
+                f"FIRMS API connection error: {str(e)}. Using fallback demo data.",
+            )

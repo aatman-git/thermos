@@ -22,6 +22,9 @@ _ANCHORS = [
     (21.14, 79.38, "Forest", 900),         # central India forest
     (12.97, 77.59, "Cropland", 12500),     # Karnataka cropland fringe
     (30.33, 76.38, "Cropland", 6200),      # Punjab cropland
+    (21.90, 86.34, "Forest", 450),         # Similipal National Park / biosphere reserve
+    (29.53, 78.77, "Forest", 350),         # Jim Corbett National Park
+    (11.66, 76.62, "Forest", 600),         # Bandipur / Nilgiri biosphere reserve
     (26.85, 80.94, "Grassland", 9800),
     (25.43, 81.85, "Bare Land", 1500),
     (22.30, 73.20, "Shrubland", 2300),
