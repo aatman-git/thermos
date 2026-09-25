@@ -17,7 +17,7 @@ def test_full_pipeline_and_endpoints(client):
     assert body["temporal"]["observation_count_7d"] >= 1
     assert body["geospatial"]["land_cover"]
     assert body["explainability"]["human_readable_summary"]
-    assert body["meta"]["data_mode"] == "demo"
+    assert body["meta"]["data_mode"] in ("demo", "live")
     eid = body["event"]["id"]
 
     assert client.get("/api/health").json()["status"] in ("ok", "degraded")

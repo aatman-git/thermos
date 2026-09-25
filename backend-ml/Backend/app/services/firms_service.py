@@ -428,16 +428,30 @@ class FirmsService:
             )
         try:
             fires = self._fetch_csv(source=source, bbox=bbox, day_range=day_range)
+            # If 1-day yields 0 events for this regional bbox (e.g. between satellite passes),
+            # check the 3-day satellite pass window to retrieve real active thermal events
+            if not fires and day_range < 3:
+                log.info("FIRMS returned 0 events for bbox=%s at day_range=%s; checking 3-day satellite pass window", bbox, day_range)
+                fires = self._fetch_csv(source=source, bbox=bbox, day_range=3)
+
+            # If still 0 events, try VIIRS_NOAA20_NRT 3-day
             if not fires:
-                log.info("FIRMS returned 0 events for bbox=%s; using fallback events", bbox)
+                log.info("Checking secondary satellite VIIRS_NOAA20_NRT 3-day window for bbox=%s", bbox)
+                try:
+                    fires = self._fetch_csv(source="VIIRS_NOAA20_NRT", bbox=bbox, day_range=3)
+                except Exception as ex_noaa:
+                    log.warning("Secondary satellite check error: %s", ex_noaa)
+
+            if not fires:
+                log.info("FIRMS confirmed 0 active thermal anomalies for bbox=%s in the satellite observation window", bbox)
                 return (
-                    self.get_fallback_events(limit),
-                    "demo",
-                    "No fire hotspots currently detected in requested area.",
+                    [],
+                    "live",
+                    "No fire hotspots currently detected in requested area in current satellite window.",
                 )
             return fires[:limit], "live", None
         except Exception as e:
-            log.warning("FIRMS live fetch error (%s). Falling back to demo data.", e)
+            log.warning("FIRMS live fetch error (%s).", e)
             return (
                 self.get_fallback_events(limit),
                 "demo",

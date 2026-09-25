@@ -39,8 +39,8 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict =
     # -------------------------------------------------------------
     has_explicit_thermal = obs.brightness_k is not None or obs.frp_mw is not None
     log.info(
-        "PREDICT [Step 1/4] Location received: lat=%.5f, lon=%.5f (explicit_thermal=%s, brightness=%s, frp=%s)",
-        lat, lon, has_explicit_thermal, obs.brightness_k, obs.frp_mw,
+        "PREDICT [Step 1/4] Location received: lat=%.5f, lon=%.5f (explicit_thermal=%s, brightness=%s, frp=%s) | user=%s",
+        lat, lon, has_explicit_thermal, obs.brightness_k, obs.frp_mw, user,
     )
 
     try:
@@ -150,7 +150,24 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict =
         if has_explicit_thermal:
             brightness_k = float(obs.brightness_k if obs.brightness_k is not None else 335.0)
             frp_mw = float(obs.frp_mw if obs.frp_mw is not None else 20.0)
-            conf_pct = float(obs.confidence if obs.confidence is not None else 75.0)
+            if obs.confidence is not None:
+                if isinstance(obs.confidence, (int, float)):
+                    conf_pct = float(obs.confidence)
+                else:
+                    c_str = str(obs.confidence).strip().lower()
+                    if c_str in ("h", "high"):
+                        conf_pct = 90.0
+                    elif c_str in ("l", "low"):
+                        conf_pct = 35.0
+                    elif c_str in ("n", "nominal", "medium"):
+                        conf_pct = 65.0
+                    else:
+                        try:
+                            conf_pct = float(c_str)
+                        except ValueError:
+                            conf_pct = 75.0
+            else:
+                conf_pct = 75.0
             dn_val = 1 if (obs.daynight or "D").upper().startswith("D") else 0
             obs_count = 3
             persistence_hrs = 8.0
@@ -158,7 +175,25 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict =
         elif nearby_hotspot is not None:
             brightness_k = float(nearby_hotspot.get("brightness_k") or nearby_hotspot.get("brightness") or 340.0)
             frp_mw = float(nearby_hotspot.get("frp_mw") or nearby_hotspot.get("frp") or 25.0)
-            conf_pct = float(nearby_hotspot.get("confidence_numeric") or nearby_hotspot.get("confidence") or 75.0)
+            raw_c = nearby_hotspot.get("confidence_numeric") if nearby_hotspot.get("confidence_numeric") is not None else nearby_hotspot.get("confidence")
+            if raw_c is not None:
+                if isinstance(raw_c, (int, float)):
+                    conf_pct = float(raw_c)
+                else:
+                    c_str = str(raw_c).strip().lower()
+                    if c_str in ("h", "high"):
+                        conf_pct = 90.0
+                    elif c_str in ("l", "low"):
+                        conf_pct = 35.0
+                    elif c_str in ("n", "nominal", "medium"):
+                        conf_pct = 65.0
+                    else:
+                        try:
+                            conf_pct = float(c_str)
+                        except ValueError:
+                            conf_pct = 75.0
+            else:
+                conf_pct = 75.0
             dn_raw = str(nearby_hotspot.get("daynight") or "D").upper()
             dn_val = 1 if dn_raw.startswith("D") else 0
             obs_count = int(nearby_hotspot.get("observation_count_7d") or 3)
@@ -244,6 +279,7 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict =
             risk_level = "CRITICAL" if risk_score >= 80.0 else ("HIGH" if risk_score >= 60.0 else ("MODERATE" if risk_score >= 35.0 else "LOW"))
 
         # Generate Gemini AI explanation
+        log.info("PREDICT [Step 4a] Generating AI explanation with Gemini...")
         expl_text = generate_fire_explanation({
             "category": predicted_class,
             "confidence": confidence_val,
@@ -252,13 +288,15 @@ def predict(obs: FirmsObservationIn, db: Session = Depends(get_db), user: dict =
             "osm": osm_ctx,
             "copernicus": cop_ctx_obj,
         })
+        log.info("PREDICT [Step 4a] AI explanation result: %s", expl_text[:100] if expl_text else "None")
 
         # -------------------------------------------------------------
         # Step 4: Return Prediction
         # -------------------------------------------------------------
         log.info(
-            "PREDICT [Step 4/4] Prediction returned: class='%s', confidence=%.3f, risk_score=%.1f (%s)",
+            "PREDICT [Step 4/4] Prediction returned: class='%s', confidence=%.3f, risk_score=%.1f (%s), explanation=%s",
             predicted_class, confidence_val, risk_score, risk_level,
+            "present" if expl_text else "None",
         )
 
         ind_label = f" (Within industrial zone: {rel_tags.get('name', 'Industrial Area')})" if industrial_ctx.get("is_industrial") else ""

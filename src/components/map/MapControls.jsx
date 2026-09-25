@@ -34,14 +34,14 @@ const KNOWN_PLACES = {
 };
 
 export default function MapControls() {
-  const { map, flyTo, toggleBasemap, changeBasemap, basemap, viewCoords } = useMap() || {};
+  const { map, flyTo, changeBasemap, basemap, viewCoords } = useMap() || {};
   const setMapMode = useStore((s) => s.setMapMode);
   const mapMode = useStore((s) => s.mapMode);
   const showIndustrialOverlay = useStore((s) => s.showIndustrialOverlay);
   const toggleIndustrialOverlay = useStore((s) => s.toggleIndustrialOverlay);
   const setFilter = useStore((s) => s.setFilter);
   const predictLocation = useStore((s) => s.predictLocation);
-  const eventsCount = useStore((s) => s.events?.length ?? 0);
+  const eventsCount = useStore((s) => s.events?.features?.length ?? 0);
 
   const [searchValue, setSearchValue] = useState('');
   const [drawing, setDrawing] = useState(false);

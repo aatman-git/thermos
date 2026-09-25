@@ -1,11 +1,12 @@
-"""Copernicus / Sentinel Hub integration service.
-Handles OAuth authentication (token acquisition, caching, and refresh) and
-fetches Sentinel-2 land cover classification and NDVI vegetation index.
-Fails gracefully to null/unavailable states without crashing the classification pipeline.
+"""ESA WorldCover WMS Land Cover Service.
+Integrates with the public ESA WorldCover 2021 Web Map Service (WMS) to retrieve
+10-meter global land cover classification and representative vegetation index (NDVI).
+Requires NO API key, NO credentials, and NO OAuth authentication.
+Fails gracefully to structured fallback dictionaries on network timeouts or errors.
 """
 from __future__ import annotations
 
-import os
+import math
 import time
 from typing import Any
 
@@ -14,92 +15,72 @@ import httpx
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
-log = get_logger("copernicus")
+log = get_logger("worldcover")
 
-# In-memory caches
-_token_cache: dict[str, Any] = {"token": None, "expires_at": 0}
-_copernicus_cache: dict[str, dict[str, Any]] = {}
+# In-memory cache keyed by rounded coordinate (lat_3dec, lon_3dec), 24h TTL
+_land_cover_cache: dict[str, dict[str, Any]] = {}
+# Alias for backward compatibility
+_copernicus_cache = _land_cover_cache
 
-# Sentinel Hub / Copernicus endpoints
-SENTINEL_HUB_OAUTH_URL = "https://services.sentinel-hub.com/oauth/token"
-CDSE_OAUTH_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
-SENTINEL_HUB_PROCESS_URL = "https://services.sentinel-hub.com/api/v1/process"
-CDSE_PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
+# ESA WorldCover Public WMS Endpoints
+# Primary: user-specified endpoint on Terrascope
+PRIMARY_WMS_URL = "https://services.terrascope.be/wms/v2"
+PRIMARY_LAYER = "WORLDCOVER_2021_MAP"
+
+# Active Terrascope Titiler WMS endpoint (official live replacement infrastructure)
+TITILER_WMS_URL = "https://titiler.terrascope.be/wms"
+TITILER_LAYER = "esa-worldcover-map-10m-2021-v2_map"
+
+# 11 Official ESA WorldCover 2021 Classes & Legend
+# Map: RGB tuple -> (class_code, raw_class_name, normalized_land_cover_type, representative_ndvi)
+ESA_PALETTE: dict[tuple[int, int, int], tuple[int, str, str, float]] = {
+    (0, 100, 0): (10, "Tree cover", "dense_forest", 0.72),
+    (255, 187, 34): (20, "Shrubland", "shrubland", 0.28),
+    (255, 255, 76): (30, "Grassland", "grassland", 0.32),
+    (240, 150, 255): (40, "Cropland", "cropland", 0.45),
+    (250, 0, 0): (50, "Built-up", "built_up", 0.12),
+    (180, 180, 180): (60, "Bare / sparse vegetation", "bare_sparse_vegetation", 0.06),
+    (240, 240, 240): (70, "Snow and ice", "snow_ice", -0.05),
+    (0, 100, 200): (80, "Permanent water bodies", "water_body", -0.15),
+    (0, 150, 160): (90, "Herbaceous wetland", "wetland", 0.40),
+    (0, 207, 117): (95, "Mangroves", "mangroves", 0.65),
+    (250, 230, 160): (100, "Moss and lichen", "moss_lichen", 0.20),
+}
+
+# Lookup by integer class code
+ESA_CLASS_CODES: dict[int, tuple[str, str, float]] = {
+    10: ("Tree cover", "dense_forest", 0.72),
+    20: ("Shrubland", "shrubland", 0.28),
+    30: ("Grassland", "grassland", 0.32),
+    40: ("Cropland", "cropland", 0.45),
+    50: ("Built-up", "built_up", 0.12),
+    60: ("Bare / sparse vegetation", "bare_sparse_vegetation", 0.06),
+    70: ("Snow and ice", "snow_ice", -0.05),
+    80: ("Permanent water bodies", "water_body", -0.15),
+    90: ("Herbaceous wetland", "wetland", 0.40),
+    95: ("Mangroves", "mangroves", 0.65),
+    100: ("Moss and lichen", "moss_lichen", 0.20),
+}
 
 
-def _get_credentials() -> tuple[str, str]:
-    """Retrieve Copernicus Client ID & Secret from Settings or Environment."""
-    settings = get_settings()
-    cid = (
-        getattr(settings, "COPERNICUS_CLIENT_ID", "")
-        or os.environ.get("COPERNICUS_CLIENT_ID", "")
-    ).strip()
-    secret = (
-        getattr(settings, "COPERNICUS_CLIENT_SECRET", "")
-        or os.environ.get("COPERNICUS_CLIENT_SECRET", "")
-    ).strip()
-    return cid, secret
-
-
-def get_oauth_token() -> str | None:
-    """Acquire or return cached OAuth2 access token for Sentinel Hub / Copernicus CDSE.
-    Refreshes automatically when within 60 seconds of expiration.
-    """
-    cid, secret = _get_credentials()
-    if not cid or not secret:
-        log.debug("Copernicus credentials not configured (COPERNICUS_CLIENT_ID / COPERNICUS_CLIENT_SECRET empty)")
-        return None
-
-    now = time.time()
-    if now < _token_cache.get("failed_until", 0):
-        return None
-
-    if _token_cache.get("token") and now < (_token_cache.get("expires_at", 0) - 60):
-        return _token_cache["token"]
-
-    settings = get_settings()
-    timeout_s = float(getattr(settings, "COPERNICUS_TIMEOUT_S", 3.0))
-
-    # Try configured or standard Sentinel Hub OAuth endpoint first, fallback to CDSE
-    auth_endpoints = [
-        getattr(settings, "COPERNICUS_TOKEN_URL", SENTINEL_HUB_OAUTH_URL),
-        CDSE_OAUTH_URL,
-    ]
-
-    for endpoint in auth_endpoints:
-        try:
-            with httpx.Client(timeout=timeout_s) as client:
-                resp = client.post(
-                    endpoint,
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": cid,
-                        "client_secret": secret,
-                    },
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    access_token = data.get("access_token")
-                    expires_in = int(data.get("expires_in", 3600))
-                    if access_token:
-                        _token_cache["token"] = access_token
-                        _token_cache["expires_at"] = now + expires_in
-                        _token_cache.pop("failed_until", None)
-                        log.info("Successfully authenticated with Copernicus/Sentinel Hub OAuth")
-                        return access_token
-                else:
-                    log.warning("Copernicus OAuth endpoint %s returned %s: %s", endpoint, resp.status_code, resp.text[:200])
-        except Exception as e:
-            log.warning("Copernicus OAuth request failed for %s: %s", endpoint, e)
-
-    # Cache negative auth result for 300 seconds so individual events don't block
-    _token_cache["failed_until"] = now + 300.0
-    return None
+def _match_rgb_to_class(r: int, g: int, b: int) -> tuple[int, str, str, float]:
+    """Find closest ESA WorldCover class by Euclidean distance in RGB color space."""
+    best_dist = float("inf")
+    best_match = (50, "Built-up", "built_up", 0.12)
+    for (pr, pg, pb), entry in ESA_PALETTE.items():
+        dist = (pr - r) ** 2 + (pg - g) ** 2 + (pb - b) ** 2
+        if dist < best_dist:
+            best_dist = dist
+            best_match = entry
+            if dist == 0:
+                break
+    return best_match
 
 
 def derive_land_cover_from_ndvi(ndvi: float | None) -> str:
-    """Map NDVI vegetation index to primary land cover classification category."""
+    """Map NDVI vegetation index to primary land cover classification category.
+    Retained for backward compatibility with existing tests and pipelines.
+    """
     if ndvi is None:
         return "unclassified"
     if ndvi >= 0.60:
@@ -115,142 +96,205 @@ def derive_land_cover_from_ndvi(ndvi: float | None) -> str:
     return "bare_land"
 
 
-def get_copernicus_context(lat: float, lon: float) -> dict[str, Any]:
-    """Retrieve Copernicus Sentinel-2 land cover classification and NDVI for a coordinate.
+def _query_wms_feature_info(
+    client: httpx.Client,
+    base_url: str,
+    layer: str,
+    lat: float,
+    lon: float,
+    i: int = 5,
+    j: int = 5,
+    timeout_s: float = 10.0,
+) -> tuple[int, str, str, float] | None:
+    """Execute a WMS GetFeatureInfo request against an ESA WorldCover endpoint."""
+    delta = 0.001
+    min_lat, max_lat = lat - delta, lat + delta
+    min_lon, max_lon = lon - delta, lon + delta
+
+    # Build standard OGC WMS 1.3.0 GetFeatureInfo parameters
+    params: dict[str, str] = {
+        "SERVICE": "WMS",
+        "VERSION": "1.3.0",
+        "REQUEST": "GetFeatureInfo",
+        "LAYERS": layer,
+        "QUERY_LAYERS": layer,
+        "STYLES": "",
+        "FORMAT": "image/png",
+        "CRS": "EPSG:4326",
+        "BBOX": f"{min_lat:.6f},{min_lon:.6f},{max_lat:.6f},{max_lon:.6f}",
+        "WIDTH": "11",
+        "HEIGHT": "11",
+        "I": str(i),
+        "J": str(j),
+        "INFO_FORMAT": "application/geo+json" if "titiler" in base_url else "application/json",
+    }
+
+    if "titiler" in base_url:
+        params["TIME"] = "2021-01-01"
+
+    headers = {
+        "User-Agent": "THERMOS-WorldCover-Client/1.0 (Earth Observation Land Cover)",
+        "Accept": "application/geo+json, application/json, text/plain, */*",
+    }
+
+    resp = client.get(base_url, params=params, headers=headers, timeout=timeout_s)
+    if resp.status_code != 200:
+        log.debug("WMS %s returned status %s: %s", base_url, resp.status_code, resp.text[:150])
+        return None
+
+    # Parse GeoJSON or JSON response
+    try:
+        data = resp.json()
+    except Exception:
+        # Fallback text parsing if not JSON
+        text = resp.text
+        for code, (name, norm, ndvi) in ESA_CLASS_CODES.items():
+            if name.lower() in text.lower():
+                return code, name, norm, ndvi
+        return None
+
+    props = {}
+    if isinstance(data, dict):
+        features = data.get("features", [])
+        if features and isinstance(features[0], dict):
+            props = features[0].get("properties", {})
+        else:
+            props = data.get("properties", data)
+
+    # Check for direct RGB bands
+    b1 = props.get("band_1")
+    b2 = props.get("band_2")
+    b3 = props.get("band_3")
+    if b1 is not None and b2 is not None and b3 is not None:
+        return _match_rgb_to_class(int(b1), int(b2), int(b3))
+
+    # Check for integer class code attributes (e.g. 'GRAY_INDEX', 'value', 'class', 'code')
+    for key in ("GRAY_INDEX", "value", "class", "code", "label"):
+        if key in props and props[key] is not None:
+            try:
+                val = int(props[key])
+                if val in ESA_CLASS_CODES:
+                    name, norm, ndvi = ESA_CLASS_CODES[val]
+                    return val, name, norm, ndvi
+            except (ValueError, TypeError):
+                pass
+
+    return None
+
+
+def get_land_cover_context(lat: float, lon: float) -> dict[str, Any]:
+    """Retrieve ESA WorldCover 2021 land cover classification for a coordinate.
+    Queries the public ESA WorldCover WMS endpoint (no authentication required).
     Returns:
       {
-        "land_cover_type": str | None,
-        "ndvi_value": float | None,
-        "source": str,
-        "status": str,
-        "note": str | None
+        "land_cover_type": str,      # e.g. "dense_forest", "built_up", "cropland", "bare_sparse_vegetation"
+        "ndvi_value": float | None,  # representative NDVI value
+        "raw_class": str | None,     # official ESA WorldCover class name (e.g. "Built-up")
+        "class_code": int | None,    # official ESA WorldCover class code (e.g. 50)
+        "source": str,               # "esa_worldcover_wms"
+        "status": str,               # "success" or "unavailable"
+        "note": str | None           # provenance detail or failure explanation
       }
-    Always returns structured dictionary; never raises exceptions or crashes caller.
+    Always returns a structured dictionary; never raises exceptions or crashes the caller.
     """
-    cache_key = f"copernicus:{round(lat, 3)}:{round(lon, 3)}"
+    cache_key = f"worldcover:{round(lat, 3)}:{round(lon, 3)}"
     now = time.time()
-    if cache_key in _copernicus_cache and now - _copernicus_cache[cache_key]["_ts"] < 86400:
-        return _copernicus_cache[cache_key]["data"]
+    if cache_key in _land_cover_cache and (now - _land_cover_cache[cache_key]["_ts"] < 86400):
+        return _land_cover_cache[cache_key]["data"]
 
-    cid, secret = _get_credentials()
-    if not cid or not secret:
-        result = {
-            "land_cover_type": None,
-            "ndvi_value": None,
-            "source": "copernicus_unconfigured",
-            "status": "unavailable",
-            "note": "COPERNICUS_CLIENT_ID and COPERNICUS_CLIENT_SECRET not set in environment",
-        }
-        _copernicus_cache[cache_key] = {"_ts": now, "data": result}
-        return result
-
-    token = get_oauth_token()
-    if not token:
-        result = {
-            "land_cover_type": None,
-            "ndvi_value": None,
-            "source": "copernicus_auth_failed",
-            "status": "unavailable",
-            "note": "Failed to authenticate with Copernicus Sentinel Hub OAuth",
-        }
-        _copernicus_cache[cache_key] = {"_ts": now, "data": result}
-        return result
-
-    # Query Sentinel Hub Process API for Sentinel-2 L2A B04 (Red) and B08 (NIR)
     settings = get_settings()
-    timeout_s = float(getattr(settings, "COPERNICUS_TIMEOUT_S", 8.0))
+    timeout_s = float(getattr(settings, "WORLDCOVER_TIMEOUT_S", 10.0))
 
-    # 0.005 deg bounding box (~500m window around coordinate)
-    delta = 0.005
-    bbox = [lon - delta, lat - delta, lon + delta, lat + delta]
+    # WMS endpoint priority list: primary Terrascope v2 endpoint, followed by active Titiler endpoint
+    primary_url = getattr(settings, "WORLDCOVER_WMS_URL", PRIMARY_WMS_URL)
+    primary_layer = getattr(settings, "WORLDCOVER_LAYER", PRIMARY_LAYER)
+    fallback_url = getattr(settings, "WORLDCOVER_WMS_FALLBACK_URL", TITILER_WMS_URL)
+    fallback_layer = getattr(settings, "WORLDCOVER_FALLBACK_LAYER", TITILER_LAYER)
 
-    evalscript = """//VERSION=3
-function setup() {
-  return {
-    input: ["B04", "B08", "dataMask"],
-    output: { bands: 3, sampleType: "FLOAT32" }
-  };
-}
-function evaluatePixel(sample) {
-  let ndvi = (sample.B08 - sample.B04) / (sample.B08 + sample.B04 + 0.0001);
-  return [ndvi, sample.B04, sample.B08];
-}
-"""
+    endpoints = [
+        (primary_url, primary_layer),
+        (fallback_url, fallback_layer),
+    ]
 
-    payload = {
-        "input": {
-            "bounds": {
-                "bbox": bbox,
-                "properties": {"crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"}
-            },
-            "data": [
-                {
-                    "type": "sentinel-2-l2a",
-                    "dataFilter": {
-                        "maxCloudCoverage": 40,
-                        "timeRange": {
-                            "from": "2024-01-01T00:00:00Z",
-                            "to": "2026-09-24T23:59:59Z"
-                        }
-                    }
-                }
-            ]
-        },
-        "output": {
-            "width": 16,
-            "height": 16,
-            "responses": [{"identifier": "default", "format": {"type": "application/json"}}]
-        },
-        "evalscript": evalscript
-    }
+    _endpoint_failed_until: dict[str, float] = getattr(get_land_cover_context, "_endpoint_failed_until", {})
+    setattr(get_land_cover_context, "_endpoint_failed_until", _endpoint_failed_until)
 
-    last_error = None
-    process_endpoints = [SENTINEL_HUB_PROCESS_URL, CDSE_PROCESS_URL]
+    last_error: str | None = None
+    classified: tuple[int, str, str, float] | None = None
 
-    for endpoint in process_endpoints:
+    for base_url, layer in endpoints:
+        if now < _endpoint_failed_until.get(base_url, 0):
+            continue
+
         try:
-            with httpx.Client(timeout=timeout_s) as client:
-                resp = client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
-                    },
-                    json=payload
+            with httpx.Client(timeout=timeout_s, follow_redirects=True) as client:
+                # 1. Query center point (I=5, J=5)
+                classified = _query_wms_feature_info(
+                    client=client,
+                    base_url=base_url,
+                    layer=layer,
+                    lat=lat,
+                    lon=lon,
+                    i=5,
+                    j=5,
+                    timeout_s=timeout_s,
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # Calculate mean NDVI if pixel array is returned
-                    ndvi_val = 0.45
-                    if isinstance(data, list) and data:
-                        valid_ndvis = [float(x[0]) for x in data if len(x) > 0 and -1.0 <= float(x[0]) <= 1.0]
-                        if valid_ndvis:
-                            ndvi_val = sum(valid_ndvis) / len(valid_ndvis)
 
-                    land_cover = derive_land_cover_from_ndvi(ndvi_val)
-                    result = {
-                        "land_cover_type": land_cover,
-                        "ndvi_value": round(ndvi_val, 2),
-                        "source": "copernicus_sentinel_hub",
-                        "status": "success",
-                        "note": f"Derived from Sentinel-2 L2A via Sentinel Hub API (mean NDVI: {ndvi_val:.2f})",
-                    }
-                    _copernicus_cache[cache_key] = {"_ts": now, "data": result}
-                    return result
-                else:
-                    last_error = f"HTTP {resp.status_code} from {endpoint}"
+                # 2. Industrial / built-up boundary refinement:
+                # If the center pixel is shrubland or bare vegetation inside a mixed window,
+                # check cardinal offset (I=3, J=5, ~40m west) within the ±0.001 deg bounding box.
+                # If built-up infrastructure is immediately adjacent, classify as built_up.
+                if classified is not None and classified[0] in (20, 60):
+                    adjacent = _query_wms_feature_info(
+                        client=client,
+                        base_url=base_url,
+                        layer=layer,
+                        lat=lat,
+                        lon=lon,
+                        i=3,
+                        j=5,
+                        timeout_s=min(timeout_s, 5.0),
+                    )
+                    if adjacent is not None and adjacent[0] == 50:
+                        classified = adjacent
+
+                if classified is not None:
+                    # Endpoint succeeded; clear any failure timestamp
+                    _endpoint_failed_until.pop(base_url, None)
+                    break
         except Exception as e:
-            last_error = str(e)
-            log.warning("Copernicus Process API call to %s failed: %s", endpoint, e)
+            last_error = f"{type(e).__name__}: {e}"
+            _endpoint_failed_until[base_url] = now + 300.0  # cool off for 5 minutes
+            log.warning("ESA WorldCover WMS query to %s failed: %s", base_url, e)
 
-    # Graceful fallback: return null Copernicus values without crashing
-    safe_result = {
-        "land_cover_type": None,
+    if classified is not None:
+        class_code, raw_name, norm_type, ndvi_val = classified
+        result = {
+            "land_cover_type": norm_type,
+            "ndvi_value": ndvi_val,
+            "raw_class": raw_name,
+            "class_code": class_code,
+            "source": "esa_worldcover_wms",
+            "status": "success",
+            "note": f"ESA WorldCover 2021 WMS: {raw_name} (class {class_code})",
+        }
+        _land_cover_cache[cache_key] = {"_ts": now, "data": result}
+        return result
+
+    # Safe fallback if all WMS queries timed out or failed
+    fallback_result = {
+        "land_cover_type": "unknown",
         "ndvi_value": None,
-        "source": "copernicus_unavailable",
+        "raw_class": "Unknown",
+        "class_code": None,
+        "source": "esa_worldcover_wms",
         "status": "unavailable",
-        "note": f"Sentinel Hub Process API query failed or timed out: {last_error}",
+        "note": f"ESA WorldCover WMS query failed or timed out: {last_error}",
     }
-    _copernicus_cache[cache_key] = {"_ts": now, "data": safe_result}
-    return safe_result
+    _land_cover_cache[cache_key] = {"_ts": now, "data": fallback_result}
+    return fallback_result
+
+
+# Re-export get_copernicus_context and get_worldcover_context for seamless drop-in compatibility
+get_copernicus_context = get_land_cover_context
+get_worldcover_context = get_land_cover_context

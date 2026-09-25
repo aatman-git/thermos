@@ -73,17 +73,24 @@ class Settings(BaseSettings):
     MAX_API_PAGE_SIZE: int = 200
     DEFAULT_PAGE_SIZE: int = 50
 
-    # AI Explanation & Investigator (Powered by Google Gemini 3.6 / 2.0 Flash)
+    # AI Explanation & Investigator (Powered by Google Gemini)
     ENABLE_AI: bool = True
     LLM_PROVIDER: str = "gemini"  # gemini | none
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
+    AI_MODEL: str = "gemini-flash-lite-latest"
     OPENAI_API_KEY: str = ""
 
-    # Copernicus / Sentinel Hub OAuth & API
+    # ESA WorldCover WMS (Public global 10m land cover; no API key or OAuth credentials required)
+    WORLDCOVER_WMS_URL: str = "https://services.terrascope.be/wms/v2"
+    WORLDCOVER_LAYER: str = "WORLDCOVER_2021_MAP"
+    WORLDCOVER_WMS_FALLBACK_URL: str = "https://titiler.terrascope.be/wms"
+    WORLDCOVER_FALLBACK_LAYER: str = "esa-worldcover-map-10m-2021-v2_map"
+    WORLDCOVER_TIMEOUT_S: float = 10.0
+
+    # Deprecated Copernicus Sentinel Hub settings (optional, retained for backward compatibility)
     COPERNICUS_CLIENT_ID: str = ""
     COPERNICUS_CLIENT_SECRET: str = ""
-    COPERNICUS_TOKEN_URL: str = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
     COPERNICUS_TIMEOUT_S: float = 10.0
 
     # Scheduler
@@ -100,6 +107,8 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        if not self.is_production and "http://localhost:5174" not in origins:
+            origins.append("http://localhost:5174")
         if self.is_production:
             # Strictly reject wildcard origins in production
             origins = [o for o in origins if o != "*"]

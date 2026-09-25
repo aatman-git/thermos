@@ -16,10 +16,13 @@ export default function CommandCentre() {
   const dataSource = useStore((s) => s.dataSource);
   const loading = useStore((s) => s.loading);
 
+  console.info('[CommandCentre] Current dataSource state:', dataSource, '| Loading:', loading);
+
   const [mobileView, setMobileView] = useState('map'); // 'map' | 'priority'
 
   // Single source of truth: BOTH map and sidebar consume the exact same events
   const events = getFilteredEvents();
+  console.info('[CommandCentre] Filtered events count:', events.length, '| Sample event 0:', events[0]?.properties?.id);
 
   const topEvents = useMemo(() => {
     return [...events]

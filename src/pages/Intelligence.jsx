@@ -22,13 +22,14 @@ const INDUSTRIAL_CLUSTERS = [
 
 export default function Intelligence() {
   const selectEvent = useStore((s) => s.selectEvent);
-  const events = mockGeoJSON.features;
+  const storeEvents = useStore((s) => s.events?.features);
+  const events = (storeEvents && storeEvents.length > 0) ? storeEvents : mockGeoJSON.features;
   const reduceMotion = useReducedMotion();
 
   const [selectedCluster, setSelectedCluster] = useState(INDUSTRIAL_CLUSTERS[0]);
 
   const persistentAnomalies = useMemo(() => {
-    return events.filter((e) => e.properties.persistence_hours >= 48);
+    return events.filter((e) => (e.properties?.persistence_hours || 0) >= 48);
   }, [events]);
 
   const reveal = reduceMotion ? {} : {

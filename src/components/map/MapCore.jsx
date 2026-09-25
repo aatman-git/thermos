@@ -7,6 +7,33 @@ import { useStore } from '../../store/useStore';
 setWorkerUrl(mapLibreWorkerUrl);
 setWorkerCount(1);
 
+// The optional FIRMS raster endpoint is only added when a real tile URL is
+// configured. A relative Vercel path would return 404 and can prevent custom
+// GeoJSON overlays from being installed.
+const FIRMS_TILE_URL = import.meta.env.VITE_THERMOS_FIRMS_TILE_URL?.trim();
+const FIRMS_RASTER_SOURCE = FIRMS_TILE_URL
+  ? {
+      firms_wms_fires: {
+        type: 'raster',
+        tiles: [FIRMS_TILE_URL],
+        tileSize: 256,
+        attribution: '&copy; NASA FIRMS Active Fire System',
+      },
+    }
+  : {};
+const FIRMS_RASTER_LAYERS = FIRMS_TILE_URL
+  ? [
+      {
+        id: 'firms-wms-fires-tiles',
+        type: 'raster',
+        source: 'firms_wms_fires',
+        paint: {
+          'raster-opacity': 0.92,
+        },
+      },
+    ]
+  : [];
+
 const MapContext = createContext(null);
 export const useMap = () => useContext(MapContext);
 
@@ -35,14 +62,7 @@ export const BASEMAP_STYLES = {
         maxzoom: 18,
         attribution: '&copy; Esri &mdash; Earthstar Geographics',
       },
-      firms_wms_fires: {
-        type: 'raster',
-        tiles: [
-          '/api/firms/tile/fires_viirs_24/{z}/{x}/{y}.png',
-        ],
-        tileSize: 256,
-        attribution: '&copy; NASA FIRMS Active Fire System',
-      },
+      ...FIRMS_RASTER_SOURCE,
       carto_labels: {
         type: 'raster',
         tiles: [
@@ -81,14 +101,7 @@ export const BASEMAP_STYLES = {
           'raster-opacity': 1.0,
         },
       },
-      {
-        id: 'firms-wms-fires-tiles',
-        type: 'raster',
-        source: 'firms_wms_fires',
-        paint: {
-          'raster-opacity': 0.92,
-        },
-      },
+      ...FIRMS_RASTER_LAYERS,
       {
         id: 'country-boundaries-labels',
         type: 'raster',
@@ -112,14 +125,7 @@ export const BASEMAP_STYLES = {
         tileSize: 256,
         attribution: '&copy; NASA GIBS Black Marble',
       },
-      firms_wms_fires: {
-        type: 'raster',
-        tiles: [
-          '/api/firms/tile/fires_viirs_24/{z}/{x}/{y}.png',
-        ],
-        tileSize: 256,
-        attribution: '&copy; NASA FIRMS Active Fire System',
-      },
+      ...FIRMS_RASTER_SOURCE,
       carto_labels: {
         type: 'raster',
         tiles: [
@@ -141,12 +147,7 @@ export const BASEMAP_STYLES = {
         source: 'nasa_black_marble',
         paint: { 'raster-opacity': 1.0 },
       },
-      {
-        id: 'firms-wms-fires-night-tiles',
-        type: 'raster',
-        source: 'firms_wms_fires',
-        paint: { 'raster-opacity': 0.95 },
-      },
+      ...FIRMS_RASTER_LAYERS,
       {
         id: 'carto-labels-night',
         type: 'raster',
@@ -232,7 +233,7 @@ export default function MapCore({ children }) {
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState(null);
   const [basemap, setBasemap] = useState('nasa_firms'); // Defaults to official NASA FIRMS GIBS map!
-  const [viewCoords, setViewCoords] = useState({ lat: 0.0, lng: 0.0, zoom: 3.0 });
+  const [viewCoords, setViewCoords] = useState({ lat: 22.5937, lng: 78.9629, zoom: 4.5 });
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -254,14 +255,15 @@ export default function MapCore({ children }) {
     const initMap = () => {
       try {
         const node = containerRef.current;
-        const style = BASEMAP_STYLES[basemap] || BASEMAP_STYLES.nasa_firms;
+        const style = BASEMAP_STYLES.nasa_firms;
 
-        // Exactly matches NASA FIRMS initial view: https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;@0.0,0.0,3.0z
+        // The operational event feed is India-centric, so open on the active
+        // thermal corridor. The FIRMS Global control still provides world view.
         const map = new MapLibreMap({
           container: node,
           style,
-          center: [0.0, 0.0],
-          zoom: 3.0,
+          center: [78.9629, 22.5937],
+          zoom: 4.5,
           maxZoom: 18,
           minZoom: 1.5,
           attributionControl: false,
@@ -269,9 +271,13 @@ export default function MapCore({ children }) {
         });
 
         mapRef.current = map;
-        map.once('load', () => {
-          markReady();
-        });
+        // The MapLibre instance is ready for local overlays as soon as the
+        // style object is accepted; remote imagery may continue loading.
+        markReady();
+        // `style.load` does not wait for every raster tile. This lets local
+        // GeoJSON overlays render even when an optional remote tile is slow.
+        map.once('style.load', markReady);
+        map.once('load', markReady);
         map.on('error', handleError);
 
         // Track live center & zoom coordinates (@lat, lng, zoom)

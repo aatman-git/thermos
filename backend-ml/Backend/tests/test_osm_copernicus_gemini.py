@@ -53,15 +53,17 @@ def test_copernicus_ndvi_derivation():
 
 
 def test_copernicus_context_unconfigured_fallback():
-    """Verify Copernicus returns structured nulls when unconfigured rather than crashing."""
+    """Verify ESA WorldCover / Copernicus returns structured safe fallback rather than crashing."""
     res = get_copernicus_context(22.47, 70.05)
     assert "land_cover_type" in res
     assert "ndvi_value" in res
     assert "status" in res
-    # When credentials not present, returns nulls safely
+    # When unavailable, returns safe unknown/None fallback without crashing
     if res["status"] == "unavailable":
-        assert res["land_cover_type"] is None
+        assert res["land_cover_type"] in ("unknown", None)
         assert res["ndvi_value"] is None
+    elif res["status"] == "success":
+        assert isinstance(res["land_cover_type"], str)
 
 
 def test_gemini_explainer_missing_key_fallback():

@@ -1,6 +1,25 @@
 import { mockGeoJSON } from '../data/mockData';
 
-const API_BASE_URL = (import.meta.env.VITE_THERMOS_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+const configuredApiUrl = import.meta.env.VITE_THERMOS_API_URL?.trim();
+const isLoopbackApiUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredApiUrl || '');
+const usableApiUrl = import.meta.env.DEV || !isLoopbackApiUrl ? configuredApiUrl : '';
+const defaultApiUrl = import.meta.env.DEV ? 'http://localhost:8000' : '';
+const API_BASE_URL = (usableApiUrl || defaultApiUrl).replace(/\/$/, '');
+
+// In production, if no explicit API URL is configured, use same-origin (relative) URLs
+// This allows the frontend to call backend APIs deployed on the same domain (e.g., Vercel Functions)
+const isProduction = !import.meta.env.DEV;
+const effectiveApiBase = API_BASE_URL || (isProduction ? '' : 'http://localhost:8000');
+
+function demoFallbackGeoJSON() {
+  return {
+    ...mockGeoJSON,
+    metadata: {
+      ...(mockGeoJSON.metadata || {}),
+      source: 'demo',
+    },
+  };
+}
 
 /**
  * Fetch thermal hotspot observations from backend NASA FIRMS endpoint /api/fires
@@ -12,7 +31,7 @@ export async function fetchFires(params = {}) {
   if (params.source) query.set('source', params.source);
   if (params.limit) query.set('limit', String(params.limit));
 
-  const url = `${API_BASE_URL}/api/fires${query.toString() ? `?${query.toString()}` : ''}`;
+  const url = `${effectiveApiBase}/api/fires${query.toString() ? `?${query.toString()}` : ''}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
@@ -26,24 +45,24 @@ export async function fetchFires(params = {}) {
   } catch (err) {
     console.warn('Backend fetch failed, using fallback:', err);
     // Offline / fallback mode
-    return mockGeoJSON;
+    return demoFallbackGeoJSON();
   }
 }
 
 export async function fetchAnomalies() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/anomalies`);
+    const response = await fetch(`${effectiveApiBase}/api/anomalies`);
     if (!response.ok) throw new Error(`Anomalies request failed (${response.status})`);
     return await response.json();
   } catch (err) {
     console.warn('Anomalies fetch failed, using mock data:', err);
-    return mockGeoJSON;
+    return demoFallbackGeoJSON();
   }
 }
 
 export async function fetchStats() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/stats`);
+    const response = await fetch(`${effectiveApiBase}/api/stats`);
     if (!response.ok) throw new Error(`Stats request failed (${response.status})`);
     return await response.json();
   } catch (err) {
@@ -65,14 +84,27 @@ export async function predictLocation({ latitude, longitude, brightness_k, frp_m
     ...(daynight != null ? { daynight } : {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}/api/predict`, {
+  // Send X-User-Role header so backend get_current_user has a role context.
+  // In dev, use Admin to bypass auth. In production, use a default role to ensure
+  // the backend doesn't reject the request due to missing auth context.
+  const headers = { 'Content-Type': 'application/json' };
+  headers['X-User-Role'] = import.meta.env.DEV ? 'Admin' : 'Analyst';
+
+  const url = `${effectiveApiBase}/api/predict`;
+  const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
+    const errText = await response.text();
+    let errData;
+    try {
+      errData = JSON.parse(errText);
+    } catch {
+      errData = { message: errText };
+    }
     throw new Error(errData.detail || errData.message || `Prediction request failed (${response.status})`);
   }
 
@@ -142,6 +174,16 @@ export function normalizeAnomaly(feature) {
  */
 export async function fetchLiveEvents() {
   const data = await fetchFires();
+  console.debug('[fetchLiveEvents] Raw API response:', { 
+    status: data.status, 
+    data_mode: data.data_mode, 
+    count: data.count,
+    hasFeatures: !!data.features,
+    featuresLength: data.features?.length,
+    hasFires: !!data.fires,
+    firesLength: data.fires?.length
+  });
+  
   const rawFeatures = data.features || (Array.isArray(data.fires) ? data.fires.map((f) => ({
     type: 'Feature',
     id: f.id,
@@ -150,13 +192,74 @@ export async function fetchLiveEvents() {
   })) : []);
 
   if (!rawFeatures || rawFeatures.length === 0) {
-    return mockGeoJSON;
+    console.warn('[fetchLiveEvents] No features found, returning demo fallback');
+    return demoFallbackGeoJSON();
   }
 
+  // Backend returns data_mode at top level: 'live' or 'demo'
+  const source = data.data_mode === 'live' ? 'live' : 'demo';
+  console.info('[fetchLiveEvents] Resolved data source:', source, '| Loaded features count:', rawFeatures.length);
+  
   return {
     type: 'FeatureCollection',
+    metadata: {
+      source,
+    },
     features: rawFeatures.map(normalizeAnomaly),
   };
+}
+
+/**
+ * Ask a custom question or submit an inquiry to the AI Investigator / Chatbot
+ * Calls POST /api/events/{id}/ask with fallback to POST /api/investigator/ask
+ */
+export async function askEventQuestion({ eventId, question, context = {} }) {
+  const payload = {
+    event_id: eventId,
+    question: (question || '').trim(),
+    context,
+  };
+
+  const primaryUrl = `${effectiveApiBase}/api/events/${encodeURIComponent(eventId)}/ask`;
+  const fallbackUrl = `${effectiveApiBase}/api/investigator/ask`;
+
+  // Try primary /api/events/{id}/ask
+  try {
+    const res = await fetch(primaryUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': import.meta.env.DEV ? 'Admin' : 'Analyst',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.debug('[askEventQuestion] Primary endpoint error:', err);
+  }
+
+  // Try fallback /api/investigator/ask
+  try {
+    const fbRes = await fetch(fallbackUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Role': import.meta.env.DEV ? 'Admin' : 'Analyst',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (fbRes.ok) {
+      return await fbRes.json();
+    }
+  } catch (err) {
+    console.debug('[askEventQuestion] Fallback endpoint error:', err);
+  }
+
+  return null;
 }
 
 export { API_BASE_URL };

@@ -14,10 +14,10 @@ export default function MapView() {
   return (
     <div className="relative w-full h-full min-h-[420px]">
       <MapCore>
-        {mapMode === 'heatmap' ? <HeatmapLayer /> : <HotspotLayer />}
+        {mapMode === 'events' ? <HotspotLayer /> : <HeatmapLayer />}
         {showIndustrialOverlay && <IndustrialBoundaryLayer />}
+        <MapControls />
       </MapCore>
-      <MapControls />
       <PredictionPanel />
       <TimeSlider />
     </div>

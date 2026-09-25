@@ -1,12 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useStore } from '../../store/useStore';
+import { TIME_PRESETS, useStore } from '../../store/useStore';
 import { clamp } from '../../utils/formatters';
 
-const PRESETS = [
-  { label: '24H', value: [0.96, 1] },
-  { label: '7D', value: [0.75, 1] },
-  { label: '30D', value: [0, 1] },
-];
+const PRESETS = Object.entries(TIME_PRESETS).map(([label, value]) => ({ label, value }));
 
 export default function TimeSlider() {
   const timeSliderValue = useStore((s) => s.timeSliderValue);

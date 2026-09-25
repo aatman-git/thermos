@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Popup, Marker } from 'maplibre-gl';
 import { useMap } from './MapCore';
-import { useStore } from '../../store/useStore';
-import { getCategoryShort, getRiskColor, getCategoryColor } from '../../utils/formatters';
+import { filterEvents, useStore } from '../../store/useStore';
+import { getRiskColor } from '../../utils/formatters';
 
 const SOURCE_ID = 'hotspots';
 const CLUSTER_LAYER = 'clusters';
@@ -13,7 +13,9 @@ const UNCLUSTERED_GLOW_LAYER = 'unclustered-point-glow';
 export default function HotspotLayer() {
   const ctx = useMap();
   const { map, mapReady } = ctx || { map: null, mapReady: false };
-  const getFilteredGeoJSON = useStore((s) => s.getFilteredGeoJSON);
+  const events = useStore((s) => s.events);
+  const filters = useStore((s) => s.filters);
+  const timeSliderValue = useStore((s) => s.timeSliderValue);
   const selectEvent = useStore((s) => s.selectEvent);
   const selectedEventId = useStore((s) => s.selectedEventId);
   const getSelectedEvent = useStore((s) => s.getSelectedEvent);
@@ -21,8 +23,15 @@ export default function HotspotLayer() {
 
   const popupRef = useRef(null);
   const predictMarkerRef = useRef(null);
+  const filteredGeoJson = useMemo(
+    () => ({ type: 'FeatureCollection', features: filterEvents(events, filters, timeSliderValue) }),
+    [events, filters, timeSliderValue]
+  );
+  const filteredGeoJsonRef = useRef(filteredGeoJson);
 
-  const filteredGeoJson = useMemo(() => getFilteredGeoJSON(), [getFilteredGeoJSON]);
+  useEffect(() => {
+    filteredGeoJsonRef.current = filteredGeoJson;
+  }, [filteredGeoJson]);
 
   // Smoothly pan to event when selected from lists or search
   useEffect(() => {
@@ -76,16 +85,15 @@ export default function HotspotLayer() {
   useEffect(() => {
     if (!map || !mapReady) return;
 
-    const data = filteredGeoJson;
-
-    const addLayersWhenReady = () => {
+    const addLayers = () => {
       try {
         if (!map.isStyleLoaded()) {
-          map.once('styledata', addLayersWhenReady);
           return;
         }
+        const data = filteredGeoJsonRef.current;
 
-        // Source with native clustering
+        // Do not gate local GeoJSON layers on remote raster tile completion.
+        // A slow/404 tile source must not suppress fire markers.
         if (!map.getSource(SOURCE_ID)) {
           map.addSource(SOURCE_ID, {
             type: 'geojson',
@@ -195,11 +203,36 @@ export default function HotspotLayer() {
           });
         }
       } catch (error) {
-        console.warn('HotspotLayer: addLayers error', error);
+        if (error?.message !== 'Style is not done loading.') {
+          console.warn('HotspotLayer: addLayers error', error);
+        }
       }
     };
 
-    addLayersWhenReady();
+    addLayers();
+    
+    // Verify layers were added; if not, schedule retries
+    const checkAndRetry = () => {
+      const hasClusterLayer = !!map.getLayer(CLUSTER_LAYER);
+      const hasUnclusteredLayer = !!map.getLayer(UNCLUSTERED_LAYER);
+      const hasSource = !!map.getSource(SOURCE_ID);
+      if (!hasClusterLayer || !hasUnclusteredLayer || !hasSource) {
+        // Layers missing, will retry
+      }
+    };
+    checkAndRetry();
+    
+    const retryTimers = [50, 250, 750, 1500, 3000, 6000].map((delay) => setTimeout(() => { addLayers(); checkAndRetry(); }, delay));
+
+    // Reinstall local overlays after a basemap style replacement.
+    // Use both 'style.load' (fires on setStyle completion) and 'styledata' 
+    // (fires on any style data change) for maximum reliability across MapLibre versions.
+    const onStyleLoad = () => {
+      addLayers();
+      checkAndRetry();
+    };
+    map.on('style.load', onStyleLoad);
+    map.on('styledata', onStyleLoad);
 
     // Map click handlers for clusters and unclustered hotspots
     const onClusterClick = (e) => {
@@ -305,28 +338,25 @@ export default function HotspotLayer() {
     map.on('mouseenter', UNCLUSTERED_LAYER, () => { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', UNCLUSTERED_LAYER, () => { map.getCanvas().style.cursor = ''; });
 
-    // Handle basemap style reloads
-    const onStyleData = () => {
-      addLayersWhenReady();
-    };
-    map.on('styledata', onStyleData);
-
     return () => {
+      console.debug('[HotspotLayer] Cleanup running');
+      retryTimers.forEach(clearTimeout);
       if (popupRef.current) popupRef.current.remove();
       map.off('click', CLUSTER_LAYER, onClusterClick);
       map.off('click', UNCLUSTERED_LAYER, onHotspotClick);
-      map.off('styledata', onStyleData);
+      map.off('style.load', onStyleLoad);
+      map.off('styledata', onStyleLoad);
       try {
         if (map.getLayer(CLUSTER_COUNT_LAYER)) map.removeLayer(CLUSTER_COUNT_LAYER);
         if (map.getLayer(CLUSTER_LAYER)) map.removeLayer(CLUSTER_LAYER);
         if (map.getLayer(UNCLUSTERED_LAYER)) map.removeLayer(UNCLUSTERED_LAYER);
         if (map.getLayer(UNCLUSTERED_GLOW_LAYER)) map.removeLayer(UNCLUSTERED_GLOW_LAYER);
         if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
-      } catch (e) {
-        // cleanup ignore
+      } catch {
+        // The basemap may be swapping while React unmounts this overlay.
       }
     };
-  }, [map, mapReady]);
+  }, [map, mapReady, selectEvent]);
 
   // Update source data whenever filtered events change
   useEffect(() => {

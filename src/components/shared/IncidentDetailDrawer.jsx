@@ -136,11 +136,22 @@ export default function IncidentDetailDrawer() {
                         Industrial Context
                       </div>
                       <div className="text-scale-sm font-bold text-[var(--color-text-primary)] mt-0.5">
-                        {p.is_industrial ? 'Industrial zone nearby' : 'No industrial infrastructure detected'}
+                        {p.is_industrial
+                          ? (p.relevant_tags?.name || p.matched_tags?.name || (p.nearest_industrial_distance_m != null && p.nearest_industrial_distance_m <= 300 ? 'Inside Industrial Complex' : 'Industrial Zone Nearby'))
+                          : 'No industrial infrastructure detected'}
                       </div>
-                      {p.is_industrial && p.nearest_industrial_distance_m != null && (
+                      {p.is_industrial ? (
                         <div className="text-scale-xs text-[var(--color-text-secondary)] mt-0.5 font-data">
-                          Nearest industrial: <strong>{Math.round(p.nearest_industrial_distance_m)} m</strong>
+                          {p.nearest_industrial_distance_m != null && (
+                            <span>Proximity: <strong>{Math.round(p.nearest_industrial_distance_m)} m</strong></span>
+                          )}
+                          {(p.relevant_tags?.industrial || p.matched_tags?.industrial) && (
+                            <span className="ml-1 text-[var(--color-text-tertiary)]">({p.relevant_tags?.industrial || p.matched_tags?.industrial})</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-scale-xs text-[var(--color-text-tertiary)] mt-0.5">
+                          OSM vector scan verified (&gt; 2km buffer)
                         </div>
                       )}
                     </div>
@@ -210,7 +221,7 @@ export default function IncidentDetailDrawer() {
             </div>
 
             {/* Bottom: Ask THERMOS */}
-            <AskThermos eventId={p.id} />
+            <AskThermos eventId={p.id} eventContext={p} />
           </motion.aside>
         </>
       )}
